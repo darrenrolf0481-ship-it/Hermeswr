@@ -28,7 +28,7 @@ import {
   ExternalLink,
   ChevronRight
 } from 'lucide-react';
-import { AgentDeployment } from '../types';
+import { AgentDeployment, AgentMetrics, TacticalCorrectionRecommendation } from '../types';
 import { sound } from '../utils/audio';
 import { 
   OPENROUTER_MODELS, 
@@ -48,6 +48,10 @@ interface AgentDeploymentViewProps {
   onAgentAction: (agentId: string, action: 'pause' | 'resume' | 'terminate' | 'recalibrate') => Promise<void>;
   onUpdateAgentModel?: (agentId: string, model: string, modelProvider?: 'hermes' | 'openrouter' | 'ollama') => Promise<void>;
   onSelectAgentForTask?: (agent: AgentDeployment) => void;
+  agentMetrics?: AgentMetrics[];
+  recommendations?: TacticalCorrectionRecommendation[];
+  onApplyCorrection?: (recommendationId: string) => Promise<void>;
+  onOpenCorrectionsTab?: () => void;
 }
 
 export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
@@ -56,11 +60,18 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
   onAgentAction,
   onUpdateAgentModel,
   onSelectAgentForTask,
+  agentMetrics = [],
+  recommendations = [],
+  onApplyCorrection,
+  onOpenCorrectionsTab,
 }) => {
   const [showDeployModal, setShowDeployModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [filterProvider, setFilterProvider] = useState<'ALL' | 'openrouter' | 'ollama' | 'hermes'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [applyingRecId, setApplyingRecId] = useState<string | null>(null);
+
+  const pendingRecs = recommendations.filter((r) => r.status === 'PENDING');
 
   // Deploy form state
   const [formName, setFormName] = useState('');
@@ -491,6 +502,68 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                   </span>
                   <span className="text-purple-300">{agent.tasksCompleted} tasks</span>
                 </div>
+
+                {(() => {
+                  const metric = agentMetrics.find((m) => m.agentId === agent.id);
+                  const rec = pendingRecs.find((r) => r.agentId === agent.id);
+                  return (
+                    <>
+                      {metric && (
+                        <div className="flex items-center justify-between text-slate-400 text-xs font-mono">
+                          <span className="flex items-center gap-1">
+                            <Activity className="w-3 h-3 text-cyan-400" /> Success Rate
+                          </span>
+                          <span className={`font-bold ${metric.successRatePct < 75 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {metric.successRatePct}% ({metric.tasksCompleted}/{metric.tasksCompleted + metric.tasksFailed})
+                          </span>
+                        </div>
+                      )}
+
+                      {rec && (
+                        <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/70 text-xs font-mono space-y-2 mt-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-amber-300 font-bold flex items-center gap-1.5 text-[11px]">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                              TACTICAL CORRECTION READY
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-red-950 text-red-300 border border-red-800 font-bold">
+                              {rec.successRatePct}% Success
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-300">
+                            Suggested Toolchain: <span className="text-cyan-300 font-bold">[{rec.suggestedToolchain.join(', ')}]</span>
+                          </p>
+                          <div className="flex items-center gap-1.5">
+                            {onOpenCorrectionsTab && (
+                              <button
+                                onClick={onOpenCorrectionsTab}
+                                className="flex-1 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono transition-colors"
+                              >
+                                Inspect
+                              </button>
+                            )}
+                            {onApplyCorrection && (
+                              <button
+                                onClick={async () => {
+                                  sound.dispatch();
+                                  setApplyingRecId(rec.id);
+                                  await onApplyCorrection(rec.id);
+                                  setApplyingRecId(null);
+                                  sound.toolSuccess();
+                                }}
+                                disabled={applyingRecId === rec.id}
+                                className="flex-1 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-[10px] font-mono font-bold flex items-center justify-center gap-1"
+                              >
+                                <Zap className="w-3 h-3 fill-current" />
+                                {applyingRecId === rec.id ? 'Applying...' : '⚡ Reconfigure'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Actions Footer */}

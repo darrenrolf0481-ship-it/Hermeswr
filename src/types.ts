@@ -168,14 +168,70 @@ export interface MemoryItem {
   updatedAt: string;
 }
 
+export interface AgentMetrics {
+  agentId: string;
+  agentCallsign: string;
+  agentName: string;
+  tasksTotal: number;
+  tasksCompleted: number;
+  tasksFailed: number;
+  tasksRunning: number;
+  successRatePct: number;
+  consecutiveFailures: number;
+  failingTools: string[];
+  lastFailureReason?: string;
+  lastFailureTimestamp?: string;
+  status: 'HEALTHY' | 'WARNING' | 'CRITICAL_DEGRADED';
+}
+
+export interface TacticalCorrectionRecommendation {
+  id: string;
+  agentId: string;
+  agentCallsign: string;
+  agentName: string;
+  createdAt: string;
+  successRatePct: number;
+  thresholdPct: number;
+  consecutiveFailures: number;
+  triggerReason: string;
+  detectedIssues: string[];
+  currentToolchain: string[];
+  suggestedToolchain: string[];
+  currentModel: string;
+  suggestedModel: string;
+  currentSpecialty: string;
+  suggestedSpecialty: string;
+  suggestedTuning: {
+    toolTimeoutMs?: number;
+    cpuQuotaPct?: number;
+    memoryUsageMb?: number;
+    autoRetryAttempts?: number;
+    priority?: 'P0' | 'P1' | 'P2';
+    nicePriority?: number;
+  };
+  optimizationSummary: string;
+  status: 'PENDING' | 'AUTO_APPLIED' | 'APPLIED' | 'DISMISSED';
+  appliedAt?: string;
+  appliedResult?: string;
+}
+
+export interface TacticalCorrectionConfig {
+  failureThresholdPct: number;
+  minTasksForEvaluation: number;
+  autoApplyEnabled: boolean;
+  autoRetryFailedTasks: boolean;
+  coolDownPeriodSec: number;
+}
+
 export type WarRoomTab = 
   | 'command' 
   | 'tasks' 
   | 'agents' 
+  | 'corrections'
   | 'telemetry' 
   | 'comms' 
   | 'tuning' 
   | 'termux' 
-  | 'stylus'
+  | 'stylus' 
   | 'matrix';
 

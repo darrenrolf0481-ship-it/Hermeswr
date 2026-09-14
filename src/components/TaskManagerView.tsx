@@ -16,16 +16,22 @@ import {
   ChevronDown,
   ChevronRight,
   X,
-  Code
+  Code,
+  Wrench,
+  AlertTriangle,
+  ArrowRight
 } from 'lucide-react';
-import { AgentTask, AgentDeployment } from '../types';
+import { AgentTask, AgentDeployment, TacticalCorrectionRecommendation } from '../types';
 import { sound } from '../utils/audio';
 
 interface TaskManagerViewProps {
   tasks: AgentTask[];
   agents: AgentDeployment[];
   onCreateTask: (task: Partial<AgentTask>) => Promise<void>;
-  onTaskAction: (taskId: string, action: 'run' | 'pause' | 'retry' | 'abort') => Promise<void>;
+  onTaskAction: (taskId: string, action: 'run' | 'pause' | 'retry' | 'abort' | 'fail') => Promise<void>;
+  recommendations?: TacticalCorrectionRecommendation[];
+  onApplyCorrection?: (recommendationId: string) => Promise<void>;
+  onOpenCorrectionsTab?: () => void;
 }
 
 export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
@@ -33,10 +39,16 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   agents,
   onCreateTask,
   onTaskAction,
+  recommendations = [],
+  onApplyCorrection,
+  onOpenCorrectionsTab,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [applyingRecId, setApplyingRecId] = useState<string | null>(null);
+
+  const pendingRecs = recommendations.filter((r) => r.status === 'PENDING');
 
   // Form state
   const [formTitle, setFormTitle] = useState('');
@@ -187,6 +199,63 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
         </div>
       </div>
 
+      {/* Tactical Correction Alert Banner */}
+      {pendingRecs.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-950/70 via-red-950/50 to-amber-950/70 border border-amber-500/80 rounded-2xl p-3.5 sm:p-4 shadow-[0_0_25px_rgba(245,158,11,0.2)] flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-900/80 border border-amber-500 text-amber-300 shrink-0">
+              <AlertTriangle className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-mono font-bold text-amber-200 text-sm">
+                  TACTICAL CORRECTION ALERT: {pendingRecs.length} AGENT(S) BELOW SUCCESS THRESHOLD
+                </h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-600">
+                  RECONFIGURATION READY
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 font-mono">
+                Agent <span className="text-cyan-300 font-bold">{pendingRecs[0].agentCallsign}</span> success rate dropped to{' '}
+                <span className="text-red-400 font-bold">{pendingRecs[0].successRatePct}%</span>. Automated C2 recommends upgrading toolchain to{' '}
+                <span className="text-cyan-300 font-bold">[{pendingRecs[0].suggestedToolchain.join(', ')}]</span>.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+            {onOpenCorrectionsTab && (
+              <button
+                onClick={() => {
+                  sound.click();
+                  onOpenCorrectionsTab();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-400 text-xs font-mono transition-colors"
+              >
+                INSPECT DETAILS
+              </button>
+            )}
+
+            {onApplyCorrection && (
+              <button
+                onClick={async () => {
+                  sound.dispatch();
+                  setApplyingRecId(pendingRecs[0].id);
+                  await onApplyCorrection(pendingRecs[0].id);
+                  setApplyingRecId(null);
+                  sound.toolSuccess();
+                }}
+                disabled={applyingRecId === pendingRecs[0].id}
+                className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-slate-950 text-xs font-mono font-bold shadow-[0_0_12px_rgba(6,182,212,0.4)] flex items-center gap-1.5 transition-all"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                {applyingRecId === pendingRecs[0].id ? 'APPLYING...' : '⚡ AUTO-RECONFIGURE TOOLCHAIN'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Filter Tabs */}
       <div className="flex items-center gap-1 overflow-x-auto no-scrollbar p-1.5 rounded-xl bg-[#0b0f17] border border-cyan-950">
         {['ALL', 'RUNNING', 'QUEUED', 'COMPLETED', 'FAILED'].map((st) => (
@@ -320,9 +389,11 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                             <span
                               className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-bold ${
                                 step.status === 'done'
-                                  ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                                   : step.status === 'running'
                                   ? 'bg-amber-950 text-amber-300 border border-amber-800 animate-pulse'
+                                  : step.status === 'failed'
+                                  ? 'bg-red-950 text-red-400 border border-red-800'
                                   : 'bg-slate-900 text-slate-500'
                               }`}
                             >
@@ -334,6 +405,55 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                     )}
                   </div>
                 )}
+
+                {/* Failure Diagnostic Log */}
+                {task.error && (
+                  <div className="p-2 rounded-lg bg-red-950/40 border border-red-900/60 text-[11px] font-mono text-red-300 flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">FAILURE LOG: </span>
+                      <span>{task.error}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tactical Correction Inline Recommendation */}
+                {(() => {
+                  const agentRec = pendingRecs.find((r) => r.agentId === task.assignedAgentId);
+                  if (agentRec && task.status === 'FAILED') {
+                    return (
+                      <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-950/60 to-cyan-950/60 border border-amber-500/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Wrench className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+                          <div className="text-xs font-mono">
+                            <span className="text-amber-300 font-bold">TACTICAL CORRECTION READY: </span>
+                            <span className="text-slate-300">
+                              Upgrade to <span className="text-cyan-300 font-bold">[{agentRec.suggestedToolchain.join(', ')}]</span> &{' '}
+                              <span className="text-cyan-300 font-bold">{agentRec.suggestedModel.split('/').pop()}</span>
+                            </span>
+                          </div>
+                        </div>
+                        {onApplyCorrection && (
+                          <button
+                            onClick={async () => {
+                              sound.dispatch();
+                              setApplyingRecId(agentRec.id);
+                              await onApplyCorrection(agentRec.id);
+                              setApplyingRecId(null);
+                              sound.toolSuccess();
+                            }}
+                            disabled={applyingRecId === agentRec.id}
+                            className="px-3 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 shrink-0 shadow-[0_0_10px_rgba(6,182,212,0.3)]"
+                          >
+                            <Zap className="w-3 h-3 fill-current" />
+                            {applyingRecId === agentRec.id ? 'RECONFIGURING...' : 'RECONFIGURE & AUTO-RETRY'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
 
                 {/* Task Actions Footer */}
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
@@ -367,6 +487,19 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                       >
                         <Pause className="w-3 h-3" />
                         PAUSE
+                      </button>
+                    )}
+
+                    {task.status === 'RUNNING' && (
+                      <button
+                        onClick={() => {
+                          sound.alert();
+                          onTaskAction(task.id, 'fail');
+                        }}
+                        className="p-1 rounded bg-slate-900 hover:bg-red-950 border border-slate-700 hover:border-red-700 text-slate-400 hover:text-red-400 text-[10px] font-mono transition-colors"
+                        title="Simulate Failure (Test Tactical Correction)"
+                      >
+                        <Flame className="w-3.5 h-3.5" />
                       </button>
                     )}
 

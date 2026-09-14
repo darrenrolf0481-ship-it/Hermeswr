@@ -8,7 +8,8 @@ import {
   Users,
   CheckSquare,
   Radio,
-  Sliders
+  Sliders,
+  Wrench
 } from 'lucide-react';
 import { WarRoomTab } from '../types';
 import { sound } from '../utils/audio';
@@ -17,17 +18,26 @@ interface NavigationDockProps {
   activeTab: WarRoomTab;
   onSelectTab: (tab: WarRoomTab) => void;
   unreadLogsCount?: number;
+  pendingCorrectionsCount?: number;
 }
 
 export const NavigationDock: React.FC<NavigationDockProps> = ({
   activeTab,
   onSelectTab,
   unreadLogsCount = 0,
+  pendingCorrectionsCount = 0,
 }) => {
-  const tabs: { id: WarRoomTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }[] = [
+  const tabs: { id: WarRoomTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number; badgeColor?: string }[] = [
     { id: 'command', label: 'C2 WAR ROOM', icon: MessageSquareCode },
     { id: 'telemetry', label: 'DASHBOARD', icon: Activity, badge: unreadLogsCount > 0 ? unreadLogsCount : undefined },
     { id: 'tasks', label: 'TASKS', icon: CheckSquare },
+    { 
+      id: 'corrections', 
+      label: 'CORRECTIONS', 
+      icon: Wrench, 
+      badge: pendingCorrectionsCount > 0 ? pendingCorrectionsCount : undefined,
+      badgeColor: 'bg-amber-400 text-black'
+    },
     { id: 'agents', label: 'DEPLOYMENT', icon: Users },
     { id: 'comms', label: 'COMMS MESH', icon: Radio },
     { id: 'tuning', label: 'TUNING', icon: Sliders },
@@ -59,7 +69,7 @@ export const NavigationDock: React.FC<NavigationDockProps> = ({
               <div className="relative">
                 <Icon className={`w-4 h-4 transition-transform ${isActive ? 'scale-110 text-cyan-400' : ''}`} />
                 {tab.badge && (
-                  <span className="absolute -top-1.5 -right-2 px-1 py-0.2 rounded-full bg-cyan-500 text-[8px] font-bold text-black min-w-[12px] text-center">
+                  <span className={`absolute -top-1.5 -right-2 px-1 py-0.2 rounded-full ${tab.badgeColor || 'bg-cyan-500 text-black'} text-[8px] font-bold min-w-[12px] text-center shadow-sm`}>
                     {tab.badge > 99 ? '99+' : tab.badge}
                   </span>
                 )}

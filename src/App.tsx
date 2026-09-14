@@ -11,7 +11,10 @@ import {
   AgentTask,
   CommChannel,
   TuningConfig,
-  AgentStateTransition
+  AgentStateTransition,
+  AgentMetrics,
+  TacticalCorrectionRecommendation,
+  TacticalCorrectionConfig
 } from './types';
 import { TacticalHeader } from './components/TacticalHeader';
 import { NavigationDock } from './components/NavigationDock';
@@ -24,6 +27,7 @@ import { AgentDeploymentView } from './components/AgentDeploymentView';
 import { TaskManagerView } from './components/TaskManagerView';
 import { CommChannelsView } from './components/CommChannelsView';
 import { PerformanceTuningView } from './components/PerformanceTuningView';
+import { TacticalCorrectionPanel } from './components/TacticalCorrectionPanel';
 import { sound } from './utils/audio';
 
 export default function App() {
@@ -32,6 +36,17 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [activePersona, setActivePersona] = useState<string>('Tactical Ops');
   const [temperature, setTemperature] = useState<number>(0.7);
+
+  // Tactical Correction Service State
+  const [tacticalRecommendations, setTacticalRecommendations] = useState<TacticalCorrectionRecommendation[]>([]);
+  const [tacticalMetrics, setTacticalMetrics] = useState<AgentMetrics[]>([]);
+  const [tacticalConfig, setTacticalConfig] = useState<TacticalCorrectionConfig>({
+    failureThresholdPct: 75,
+    minTasksForEvaluation: 2,
+    autoApplyEnabled: false,
+    autoRetryFailedTasks: true,
+    coolDownPeriodSec: 30,
+  });
 
   // Sub-agents registry
   const [subAgents, setSubAgents] = useState<SubAgentInfo[]>([
@@ -514,40 +529,49 @@ Awaiting operator directives.`,
       ]);
 
       if (telRes.status === 'fulfilled' && telRes.value.ok) {
-        const data: DeviceTelemetry = await telRes.value.json();
-        setTelemetry(data);
+        const ct = telRes.value.headers.get('content-type');
+        if (ct && ct.includes('application/json')) {
+          const data: DeviceTelemetry = await telRes.value.json();
+          setTelemetry(data);
 
-        const timeLabel = new Date(data.timestamp).toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        });
+          const timeLabel = new Date(data.timestamp).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          });
 
-        setTelemetryHistory((prev) => {
-          const next = [
-            ...prev,
-            {
-              time: timeLabel,
-              tokensPerSec: data.tokensPerSec,
-              cpuLoad: data.cpuLoad,
-              memoryPct: Math.round((data.ramUsedMb / data.ramTotalMb) * 100),
-            },
-          ];
-          return next.slice(-20); // keep last 20 ticks
-        });
+          setTelemetryHistory((prev) => {
+            const next = [
+              ...prev,
+              {
+                time: timeLabel,
+                tokensPerSec: data.tokensPerSec,
+                cpuLoad: data.cpuLoad,
+                memoryPct: Math.round((data.ramUsedMb / data.ramTotalMb) * 100),
+              },
+            ];
+            return next.slice(-20); // keep last 20 ticks
+          });
+        }
       }
 
       if (analyticsRes.status === 'fulfilled' && analyticsRes.value.ok) {
-        const aData = await analyticsRes.value.json();
-        if (aData.communicationThroughputHistory) {
-          setThroughputHistory(aData.communicationThroughputHistory);
+        const ct = analyticsRes.value.headers.get('content-type');
+        if (ct && ct.includes('application/json')) {
+          const aData = await analyticsRes.value.json();
+          if (aData.communicationThroughputHistory) {
+            setThroughputHistory(aData.communicationThroughputHistory);
+          }
         }
       }
 
       if (transRes.status === 'fulfilled' && transRes.value.ok) {
-        const tData: AgentStateTransition[] = await transRes.value.json();
-        if (Array.isArray(tData) && tData.length > 0) {
-          setTransitions(tData);
+        const ct = transRes.value.headers.get('content-type');
+        if (ct && ct.includes('application/json')) {
+          const tData: AgentStateTransition[] = await transRes.value.json();
+          if (Array.isArray(tData) && tData.length > 0) {
+            setTransitions(tData);
+          }
         }
       }
     } catch {
@@ -557,9 +581,162 @@ Awaiting operator directives.`,
 
   useEffect(() => {
     fetchTelemetry();
-    const interval = setInterval(fetchTelemetry, 2500);
+    fetchTacticalCorrections();
+    const interval = setInterval(() => {
+      fetchTelemetry();
+      fetchTacticalCorrections();
+    }, 2500);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchAgents = async () => {
+    try {
+      const res = await fetch('/api/agents');
+      if (res.ok) {
+        const ct = res.headers.get('content-type');
+        if (ct && ct.includes('application/json')) {
+          const data = await res.json();
+          setDeployedAgents(data);
+        }
+      }
+    } catch {}
+  };
+
+  const fetchTasks = async () => {
+    try {
+      const res = await fetch('/api/tasks');
+      if (res.ok) {
+        const ct = res.headers.get('content-type');
+        if (ct && ct.includes('application/json')) {
+          const data = await res.json();
+          setTasks(data);
+        }
+      }
+    } catch {}
+  };
+
+  const fetchTacticalCorrections = async () => {
+    try {
+      const res = await fetch('/api/tactical-corrections');
+      if (!res.ok) return;
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) return;
+      const data = await res.json();
+      if (Array.isArray(data.recommendations)) {
+        setTacticalRecommendations(data.recommendations);
+      }
+      if (Array.isArray(data.agentMetrics)) {
+        setTacticalMetrics(data.agentMetrics);
+      }
+      if (data.config) {
+        setTacticalConfig(data.config);
+      }
+    } catch {
+      // Ignore background polling glitches
+    }
+  };
+
+  const handleApplyCorrection = async (recommendationId: string) => {
+    try {
+      sound.dispatch();
+      const res = await fetch('/api/tactical-corrections/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recommendationId }),
+      });
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        sound.alert();
+        addLog('CRITICAL', 'RECONFIG_ERR', 'Server returned invalid response');
+        return;
+      }
+      const data = await res.json();
+      if (res.ok && data.success) {
+        sound.toolSuccess();
+        addLog('TACTICAL', 'RECONFIG_APPLIED', `Tactical Reconfiguration applied for agent ${data.applied?.agentCallsign}: toolchain updated to [${data.applied?.reconfiguredToolchain?.join(', ')}]`);
+        await Promise.all([fetchTacticalCorrections(), fetchAgents(), fetchTasks()]);
+      } else {
+        sound.alert();
+        addLog('CRITICAL', 'RECONFIG_ERR', data.error || 'Failed to apply tactical reconfiguration');
+      }
+    } catch (err: any) {
+      sound.alert();
+      addLog('CRITICAL', 'RECONFIG_ERR', err.message || 'Network error applying reconfiguration');
+    }
+  };
+
+  const handleDismissCorrection = async (recommendationId: string) => {
+    try {
+      sound.click();
+      const res = await fetch('/api/tactical-corrections/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recommendationId }),
+      });
+      if (res.ok) {
+        addLog('INFO', 'TACTICAL', `Dismissed correction recommendation: ${recommendationId}`);
+        await fetchTacticalCorrections();
+      }
+    } catch (err: any) {
+      addLog('CRITICAL', 'TACTICAL_ERR', err.message || 'Error dismissing recommendation');
+    }
+  };
+
+  const handleTriggerEvaluation = async () => {
+    try {
+      sound.click();
+      const res = await fetch('/api/tactical-corrections/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addLog('TACTICAL', 'C2_EVAL', `Autonomous evaluation complete: ${data.generatedCount || 0} recommendation(s) generated.`);
+        await fetchTacticalCorrections();
+      }
+    } catch (err: any) {
+      addLog('CRITICAL', 'EVAL_ERR', err.message || 'Error triggering autonomous evaluation');
+    }
+  };
+
+  const handleUpdateTacticalConfig = async (newConfig: Partial<TacticalCorrectionConfig>) => {
+    try {
+      sound.click();
+      const res = await fetch('/api/tactical-corrections/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConfig),
+      });
+      const data = await res.json();
+      if (res.ok && data.config) {
+        setTacticalConfig(data.config);
+        addLog('TACTICAL', 'CONFIG_UPDATE', `Tactical Correction threshold adjusted to ${data.config.failureThresholdPct}%.`);
+        await fetchTacticalCorrections();
+      }
+    } catch (err: any) {
+      addLog('CRITICAL', 'CONFIG_ERR', err.message || 'Error updating configuration');
+    }
+  };
+
+  const handleSimulateFailure = async (agentId?: string, failureType?: string) => {
+    try {
+      sound.alert();
+      const res = await fetch('/api/tactical-corrections/simulate-failure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId, failureType }),
+      });
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) return;
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addLog('CRITICAL', 'SIMULATOR', `Simulated failure injected on task ${data.taskId} (${data.agentId}). Tactical Correction triggered.`);
+        await Promise.all([fetchTacticalCorrections(), fetchTasks(), fetchAgents()]);
+      }
+    } catch (err: any) {
+      addLog('CRITICAL', 'SIM_ERR', err.message || 'Error simulating failure');
+    }
+  };
 
   // Fleet & Task API Handlers
   const handleDeployAgent = async (agentData: Partial<AgentDeployment>) => {
@@ -633,7 +810,7 @@ Awaiting operator directives.`,
     }
   };
 
-  const handleTaskAction = async (taskId: string, action: 'run' | 'pause' | 'retry' | 'abort') => {
+  const handleTaskAction = async (taskId: string, action: 'run' | 'pause' | 'retry' | 'abort' | 'fail') => {
     try {
       const res = await fetch(`/api/tasks/${taskId}/action`, {
         method: 'POST',
@@ -644,6 +821,7 @@ Awaiting operator directives.`,
       if (data.task) {
         setTasks((prev) => prev.map((t) => (t.id === taskId ? data.task : t)));
         addLog('TACTICAL', 'TASK_MGR', `Task ${data.task.id} (${action}): status now ${data.task.status}.`);
+        await fetchTacticalCorrections();
       }
     } catch (err: any) {
       addLog('CRITICAL', 'TASK_ERR', `Task action failed: ${err.message}`);
@@ -956,6 +1134,10 @@ Awaiting operator directives.`,
             onDeployAgent={handleDeployAgent}
             onAgentAction={handleAgentAction}
             onUpdateAgentModel={handleUpdateAgentModel}
+            agentMetrics={tacticalMetrics}
+            recommendations={tacticalRecommendations}
+            onApplyCorrection={handleApplyCorrection}
+            onOpenCorrectionsTab={() => setActiveTab('corrections')}
           />
         )}
 
@@ -965,6 +1147,24 @@ Awaiting operator directives.`,
             agents={deployedAgents}
             onCreateTask={handleCreateTask}
             onTaskAction={handleTaskAction}
+            recommendations={tacticalRecommendations}
+            onApplyCorrection={handleApplyCorrection}
+            onOpenCorrectionsTab={() => setActiveTab('corrections')}
+          />
+        )}
+
+        {activeTab === 'corrections' && (
+          <TacticalCorrectionPanel
+            recommendations={tacticalRecommendations}
+            agentMetrics={tacticalMetrics}
+            config={tacticalConfig}
+            agents={deployedAgents}
+            onApplyCorrection={handleApplyCorrection}
+            onDismissCorrection={handleDismissCorrection}
+            onUpdateConfig={handleUpdateTacticalConfig}
+            onSimulateFailure={handleSimulateFailure}
+            onRefresh={fetchTacticalCorrections}
+            onTriggerEvaluation={handleTriggerEvaluation}
           />
         )}
 
@@ -1021,6 +1221,7 @@ Awaiting operator directives.`,
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         unreadLogsCount={logs.filter((l) => l.level === 'CRITICAL').length}
+        pendingCorrectionsCount={tacticalRecommendations.filter((r) => r.status === 'PENDING').length}
       />
     </div>
   );

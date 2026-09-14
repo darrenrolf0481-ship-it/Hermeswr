@@ -29,7 +29,8 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -145,6 +146,40 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
     return true;
   });
 
+  const handleDownloadLogs = () => {
+    sound.click();
+    const exportSession = {
+      exportSession: 'Hermes-3-Alpha Tactical Logs Session',
+      device: 'Moto G5 Stylus (2025) / Android-15 (Termux)',
+      exportedAt: new Date().toISOString(),
+      activeView: activeDashboardView,
+      logStats: {
+        total: logs.length,
+        filtered: filteredLogs.length,
+        levelFilter: selectedLogLevel,
+        searchQuery: searchLogQuery || null,
+        criticalCount: logs.filter((l) => l.level === 'CRITICAL').length,
+        tacticalCount: logs.filter((l) => l.level === 'TACTICAL').length,
+        toolCount: logs.filter((l) => l.level === 'TOOL').length,
+        infoCount: logs.filter((l) => l.level === 'INFO').length,
+      },
+      currentTelemetry,
+      activeAgentsCount: agents.length,
+      activeTasksCount: tasks.length,
+      logs: logs,
+    };
+
+    const blob = new Blob([JSON.stringify(exportSession, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hermes-tactical-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const getLogLevelBadge = (level: LogEntry['level']) => {
     switch (level) {
       case 'CRITICAL':
@@ -230,7 +265,18 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <button
+            id="telemetry-download-logs-top-btn"
+            onClick={handleDownloadLogs}
+            className="p-1.5 px-2.5 rounded-lg bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-700/60 text-cyan-300 text-xs font-mono flex items-center gap-1.5 transition-colors shadow-sm"
+            title="Download current tactical log session as JSON"
+          >
+            <Download className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Download Logs</span>
+            <span className="sm:hidden">Logs</span>
+          </button>
+
           {onRefreshData && (
             <button
               onClick={() => {
@@ -841,6 +887,17 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                     className="w-full bg-[#080b12] border border-slate-800 focus:border-cyan-500 rounded-lg pl-6 pr-2 py-0.8 text-[10px] font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none"
                   />
                 </div>
+
+                <button
+                  id="telemetry-download-logs-stream-btn"
+                  onClick={handleDownloadLogs}
+                  className="px-2 py-1 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-700/60 text-cyan-300 text-[10px] font-mono flex items-center gap-1 transition-colors whitespace-nowrap"
+                  title="Download current tactical log session as JSON"
+                >
+                  <Download className="w-3 h-3 text-cyan-400" />
+                  <span className="hidden sm:inline">Download Logs</span>
+                  <span className="sm:hidden">JSON</span>
+                </button>
 
                 <button
                   onClick={() => {

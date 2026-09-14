@@ -747,6 +747,24 @@ let warRoomTasks: any[] = [
       { id: "s3", name: "Verify packet sequence and checksums", status: "pending" },
     ],
     createdAt: "2026-09-13T19:02:00Z",
+  },
+  {
+    id: "task-106",
+    title: "Raw Socket Packet Injection on eth0",
+    description: "Inject low-level Ethernet frames via raw socket in Termux sandbox for network interface fuzzing.",
+    priority: "P0_CRITICAL",
+    status: "FAILED",
+    assignedAgentId: "agent-alpha",
+    assignedAgentName: "HERMES-ALPHA",
+    progressPct: 35,
+    toolChain: ["termux_shell", "nmap"],
+    steps: [
+      { id: "s1", name: "Create SOCK_RAW descriptor", status: "done", detail: "Descriptor created" },
+      { id: "s2", name: "Bind to eth0 interface", status: "failed", detail: "Socket permission denied (Operation not permitted without root / proot)" },
+    ],
+    createdAt: "2026-09-13T19:04:00Z",
+    executionTimeMs: 15400,
+    error: "Tool execution timeout & permission denied in termux_shell: raw socket operation failed.",
   }
 ];
 
@@ -853,10 +871,487 @@ app.post("/api/tasks/:id/action", (req, res) => {
         }
       });
     }
+  } else if (action === "fail") {
+    task.status = "FAILED";
+    task.error = req.body.error || "Simulated task failure: Tool execution timeout & socket permission dropped.";
+    if (task.steps && task.steps.length > 0) {
+      task.steps[task.steps.length - 1].status = "failed";
+      task.steps[task.steps.length - 1].detail = task.error;
+    }
+    const agent = deployedAgents.find((a) => a.id === task.assignedAgentId);
+    if (agent) {
+      agent.health = Math.max(40, agent.health - 25);
+      if (agent.status === "ENGAGED") {
+        agent.status = "STANDBY";
+        agent.currentTask = undefined;
+      }
+      agentStateTransitions.unshift({
+        id: `trans-${Date.now()}`,
+        agentId: agent.id,
+        agentCallsign: agent.callsign,
+        agentName: agent.name,
+        fromStatus: "ENGAGED",
+        toStatus: "STANDBY",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        reason: `Directive failed: "${task.title}". Error: ${task.error}`,
+        triggeredBy: "TASK_PIPELINE",
+        contextSnapshot: {
+          cpuLoad: agent.cpuQuotaPct,
+          ramUsedMb: agent.memoryUsageMb,
+        }
+      });
+    }
   }
+
+  // Trigger evaluation on task action
+  evaluateTacticalCorrections();
 
   res.json({ success: true, task });
 });
+
+// ==========================================
+// HERMES WAR ROOM: AUTOMATED TACTICAL CORRECTION SERVICE
+// ==========================================
+let tacticalCorrectionConfig = {
+  failureThresholdPct: 75,
+  minTasksForEvaluation: 2,
+  autoApplyEnabled: false,
+  autoRetryFailedTasks: true,
+  coolDownPeriodSec: 30,
+};
+
+let tacticalCorrections: any[] = [];
+
+function computeAgentMetrics() {
+  try {
+    return deployedAgents.map((agent) => {
+      const agentTasks = (warRoomTasks || []).filter((t) => t && t.assignedAgentId === agent.id);
+      const completed = agentTasks.filter((t) => t.status === "COMPLETED").length;
+      const failed = agentTasks.filter((t) => t.status === "FAILED").length;
+      const running = agentTasks.filter((t) => t.status === "RUNNING").length;
+      const total = agentTasks.length;
+      const evaluatedTotal = completed + failed;
+      const successRatePct = evaluatedTotal > 0 ? Math.round((completed / evaluatedTotal) * 100) : 100;
+
+      const failedTasks = agentTasks.filter((t) => t.status === "FAILED");
+      const failingToolsSet = new Set<string>();
+      failedTasks.forEach((t) => {
+        if (Array.isArray(t.toolChain)) {
+          t.toolChain.forEach((tool: string) => {
+            if (tool) failingToolsSet.add(tool);
+          });
+        }
+      });
+
+      const consecutiveFailures = agentTasks.slice(0, 5).filter((t) => t.status === "FAILED").length;
+      const lastFailed = failedTasks[0];
+
+      let status: 'HEALTHY' | 'WARNING' | 'CRITICAL_DEGRADED' = 'HEALTHY';
+      if (evaluatedTotal >= (tacticalCorrectionConfig?.minTasksForEvaluation ?? 2)) {
+        if (successRatePct < 60) status = 'CRITICAL_DEGRADED';
+        else if (successRatePct < (tacticalCorrectionConfig?.failureThresholdPct ?? 75)) status = 'WARNING';
+      }
+
+      return {
+        agentId: agent.id,
+        agentCallsign: agent.callsign || agent.id,
+        agentName: agent.name || agent.id,
+        tasksTotal: total,
+        tasksCompleted: completed,
+        tasksFailed: failed,
+        tasksRunning: running,
+        successRatePct,
+        consecutiveFailures,
+        failingTools: Array.from(failingToolsSet),
+        lastFailureReason: lastFailed?.error || (lastFailed ? "Sub-process timeout in Termux" : undefined),
+        lastFailureTimestamp: lastFailed?.createdAt,
+        status,
+      };
+    });
+  } catch (err) {
+    console.warn("computeAgentMetrics error:", err);
+    return [];
+  }
+}
+
+function evaluateTacticalCorrections(): any[] {
+  const metrics = computeAgentMetrics();
+  const newlyGenerated: any[] = [];
+
+  for (const metric of metrics) {
+    const evaluatedTotal = metric.tasksCompleted + metric.tasksFailed;
+    if (evaluatedTotal >= tacticalCorrectionConfig.minTasksForEvaluation && metric.successRatePct < tacticalCorrectionConfig.failureThresholdPct) {
+      // Check if there is already an active pending recommendation for this agent
+      const existingPending = tacticalCorrections.find(
+        (c) => c.agentId === metric.agentId && c.status === "PENDING"
+      );
+      if (existingPending) {
+        continue;
+      }
+
+      const agent = deployedAgents.find((a) => a.id === metric.agentId);
+      if (!agent) continue;
+
+      const failingTools = metric.failingTools;
+      const detectedIssues: string[] = [];
+      let suggestedToolchain: string[] = [];
+      let suggestedModel = agent.model;
+      let suggestedSpecialty = agent.specialty;
+      let suggestedTuning: any = {
+        toolTimeoutMs: 25000,
+        cpuQuotaPct: Math.min(60, agent.cpuQuotaPct + 15),
+        autoRetryAttempts: 3,
+        priority: 'P0',
+        nicePriority: -10,
+      };
+      let optimizationSummary = "";
+
+      if (failingTools.includes("termux_shell") || failingTools.includes("nmap")) {
+        detectedIssues.push("POSIX shell socket timeout & permission ceiling in Termux userland");
+        detectedIssues.push("Unprivileged network scan dropped by Android SELinux policy");
+        suggestedToolchain = ["termux_proot", "nmap_fast_scan", "socket_sniffer"];
+        suggestedModel = "openrouter/nousresearch/hermes-3-llama-3.1-70b";
+        suggestedSpecialty = "RF & Wireless Packet Sniffing";
+        optimizationSummary = `Elevates execution into root-isolated PRoot sandbox (termux_proot) to bypass Android socket permission restrictions. Replaces generic nmap with specialized high-speed probe (nmap_fast_scan) and adds zero-copy socket sniffer. Upgrades agent model to Nous Hermes 3 70B for resilient error recovery and extends tool execution timeout to 25s.`;
+      } else if (failingTools.includes("vector_memory")) {
+        detectedIssues.push("Vector store memory pressure: SQLite-vec buffer exceeded 80MB threshold");
+        detectedIssues.push("Context token limit pressure during high-dimensional semantic search");
+        suggestedToolchain = ["vector_cache_stream", "code_interpreter", "termux_shell"];
+        suggestedModel = "openrouter/deepseek/deepseek-r1";
+        suggestedSpecialty = "Vector Embedding & RAG Pipeline";
+        suggestedTuning.memoryUsageMb = Math.max(800, agent.memoryUsageMb + 300);
+        optimizationSummary = `Replaces unbuffered vector_memory with quantized streaming cache (vector_cache_stream) to cut RAM usage by 60%. Switches reasoning engine to DeepSeek R1 for chain-of-thought verification on vector similarity thresholds.`;
+      } else {
+        detectedIssues.push(`Agent success rate dropped to ${metric.successRatePct}% (below ${tacticalCorrectionConfig.failureThresholdPct}% threshold)`);
+        detectedIssues.push("Sub-process task execution exceeded latency envelope");
+        suggestedToolchain = ["termux_proot", "code_interpreter", "curl_stealth_pipe"];
+        suggestedModel = "openrouter/nousresearch/hermes-3-llama-3.1-70b";
+        suggestedSpecialty = "Python Termux Daemons & Async Sockets";
+        optimizationSummary = `Reconfigures toolchain with resilient python code interpreter and stealth connection piping. Elevates CPU quota and increases retry attempts from 1 to 3.`;
+      }
+
+      const currentToolchain = Array.from(new Set(
+        warRoomTasks
+          .filter((t) => t.assignedAgentId === agent.id && Array.isArray(t.toolChain))
+          .flatMap((t) => t.toolChain)
+      ));
+      if (currentToolchain.length === 0) {
+        currentToolchain.push("termux_shell");
+      }
+
+      const recommendation = {
+        id: `reconfig-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        agentId: agent.id,
+        agentCallsign: agent.callsign,
+        agentName: agent.name,
+        createdAt: new Date().toISOString(),
+        successRatePct: metric.successRatePct,
+        thresholdPct: tacticalCorrectionConfig.failureThresholdPct,
+        consecutiveFailures: metric.consecutiveFailures,
+        triggerReason: `Success rate dropped to ${metric.successRatePct}% (${metric.tasksFailed} failures / ${evaluatedTotal} evaluated directives). Detected issues: ${detectedIssues[0]}`,
+        detectedIssues,
+        currentToolchain,
+        suggestedToolchain,
+        currentModel: agent.model,
+        suggestedModel,
+        currentSpecialty: agent.specialty,
+        suggestedSpecialty,
+        suggestedTuning,
+        optimizationSummary,
+        status: tacticalCorrectionConfig.autoApplyEnabled ? "AUTO_APPLIED" : "PENDING",
+        appliedAt: tacticalCorrectionConfig.autoApplyEnabled ? new Date().toISOString() : undefined,
+        appliedResult: tacticalCorrectionConfig.autoApplyEnabled ? "Autonomous self-healing applied reconfiguration." : undefined,
+      };
+
+      if (tacticalCorrectionConfig.autoApplyEnabled) {
+        applyTacticalCorrectionInternal(recommendation, "AUTONOMOUS_C2");
+      }
+
+      tacticalCorrections.unshift(recommendation);
+      newlyGenerated.push(recommendation);
+    }
+  }
+
+  return newlyGenerated;
+}
+
+function applyTacticalCorrectionInternal(recommendation: any, triggeredBy: 'OPERATOR' | 'AUTONOMOUS_C2' = 'OPERATOR') {
+  const agent = deployedAgents.find((a) => a.id === recommendation.agentId);
+  if (!agent) return false;
+
+  // 1. Hot swap model
+  agent.model = recommendation.suggestedModel;
+  agent.modelProvider = recommendation.suggestedModel.startsWith("openrouter/")
+    ? "openrouter"
+    : recommendation.suggestedModel.startsWith("ollama/")
+    ? "ollama"
+    : "hermes";
+
+  // 2. Update specialty
+  if (recommendation.suggestedSpecialty) {
+    agent.specialty = recommendation.suggestedSpecialty;
+  }
+
+  // 3. Update tuning & quota
+  if (recommendation.suggestedTuning?.cpuQuotaPct) {
+    agent.cpuQuotaPct = recommendation.suggestedTuning.cpuQuotaPct;
+  }
+  if (recommendation.suggestedTuning?.memoryUsageMb) {
+    agent.memoryUsageMb = recommendation.suggestedTuning.memoryUsageMb;
+  }
+  if (recommendation.suggestedTuning?.priority) {
+    agent.priority = recommendation.suggestedTuning.priority;
+  }
+
+  // 4. Restore health
+  agent.health = 100;
+  if (agent.status === 'ERROR' || agent.status === 'PAUSED') {
+    agent.status = 'ONLINE';
+  }
+
+  // 5. Reconfigure toolchain on all QUEUED and FAILED tasks for this agent
+  warRoomTasks.forEach((t) => {
+    if (t.assignedAgentId === agent.id) {
+      t.toolChain = [...recommendation.suggestedToolchain];
+      if (t.status === "FAILED" && tacticalCorrectionConfig.autoRetryFailedTasks) {
+        t.status = "RUNNING";
+        t.progressPct = 25;
+        t.error = undefined;
+        if (t.steps) {
+          t.steps.forEach((s: any) => {
+            if (s.status === "failed") s.status = "running";
+          });
+        }
+      }
+    }
+  });
+
+  // 6. Log State Transition for forensics
+  const currentTools = Array.isArray(recommendation.currentToolchain) ? recommendation.currentToolchain : ["termux_shell"];
+  const suggestedTools = Array.isArray(recommendation.suggestedToolchain) ? recommendation.suggestedToolchain : ["termux_proot"];
+  const transition = {
+    id: `trans-${Date.now()}`,
+    agentId: agent.id,
+    agentCallsign: agent.callsign || agent.id,
+    agentName: agent.name || agent.id,
+    fromStatus: agent.status,
+    toStatus: "ONLINE",
+    timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    reason: `Tactical Correction Reconfiguration: Toolchain [${currentTools.join(", ")} ➔ ${suggestedTools.join(", ")}]. Model upgraded to ${recommendation.suggestedModel || agent.model}. CPU quota elevated to ${agent.cpuQuotaPct}%.`,
+    triggeredBy,
+    contextSnapshot: {
+      cpuLoad: agent.cpuQuotaPct,
+      ramUsedMb: agent.memoryUsageMb,
+      activeTask: agent.currentTask,
+    }
+  };
+  agentStateTransitions.unshift(transition);
+
+  recommendation.status = triggeredBy === 'AUTONOMOUS_C2' ? 'AUTO_APPLIED' : 'APPLIED';
+  recommendation.appliedAt = new Date().toISOString();
+  recommendation.appliedResult = `Reconfigured toolchain to [${suggestedTools.join(", ")}]. Model upgraded to ${recommendation.suggestedModel || agent.model}. Failed directives re-queued with optimized toolchain.`;
+
+  return true;
+}
+
+// Initial evaluation on startup
+try {
+  evaluateTacticalCorrections();
+} catch (e) {
+  console.warn("Initial evaluation error:", e);
+}
+
+// Tactical Correction Endpoints
+app.get("/api/tactical-corrections", (_req, res) => {
+  try {
+    evaluateTacticalCorrections();
+    res.json({
+      recommendations: tacticalCorrections || [],
+      config: tacticalCorrectionConfig,
+      agentMetrics: computeAgentMetrics(),
+    });
+  } catch (err: any) {
+    res.json({
+      recommendations: tacticalCorrections || [],
+      config: tacticalCorrectionConfig,
+      agentMetrics: [],
+    });
+  }
+});
+
+app.get("/api/tactical-corrections/recommendations", (_req, res) => {
+  evaluateTacticalCorrections();
+  res.json({
+    recommendations: tacticalCorrections,
+  });
+});
+
+app.get("/api/tactical-corrections/metrics", (_req, res) => {
+  res.json({
+    metrics: computeAgentMetrics(),
+    agentMetrics: computeAgentMetrics(),
+  });
+});
+
+app.get("/api/tactical-corrections/config", (_req, res) => {
+  res.json({
+    config: tacticalCorrectionConfig,
+  });
+});
+
+app.post("/api/tactical-corrections/config", (req, res) => {
+  const { failureThresholdPct, minTasksForEvaluation, autoApplyEnabled, autoRetryFailedTasks } = req.body;
+  if (typeof failureThresholdPct === "number") {
+    tacticalCorrectionConfig.failureThresholdPct = Math.max(40, Math.min(95, failureThresholdPct));
+  }
+  if (typeof minTasksForEvaluation === "number") {
+    tacticalCorrectionConfig.minTasksForEvaluation = Math.max(1, Math.min(10, minTasksForEvaluation));
+  }
+  if (typeof autoApplyEnabled === "boolean") {
+    tacticalCorrectionConfig.autoApplyEnabled = autoApplyEnabled;
+  }
+  if (typeof autoRetryFailedTasks === "boolean") {
+    tacticalCorrectionConfig.autoRetryFailedTasks = autoRetryFailedTasks;
+  }
+
+  evaluateTacticalCorrections();
+  res.json({
+    success: true,
+    config: tacticalCorrectionConfig,
+    recommendations: tacticalCorrections,
+    agentMetrics: computeAgentMetrics(),
+  });
+});
+
+app.post("/api/tactical-corrections/evaluate", (_req, res) => {
+  const generated = evaluateTacticalCorrections();
+  res.json({
+    success: true,
+    generatedCount: generated.length,
+    recommendations: tacticalCorrections,
+    agentMetrics: computeAgentMetrics(),
+  });
+});
+
+app.post("/api/tactical-corrections/apply", (req, res) => {
+  const { recommendationId, id = recommendationId } = req.body;
+  const rec = tacticalCorrections.find((c) => c.id === id);
+  if (!rec) {
+    return res.status(404).json({ error: "Tactical correction recommendation not found" });
+  }
+
+  const success = applyTacticalCorrectionInternal(rec, "OPERATOR");
+  if (!success) {
+    return res.status(500).json({ error: "Failed to apply tactical correction" });
+  }
+
+  res.json({
+    success: true,
+    recommendation: rec,
+    applied: {
+      agentId: rec.agentId,
+      agentCallsign: rec.agentCallsign,
+      reconfiguredToolchain: rec.suggestedToolchain,
+      model: rec.suggestedModel,
+    },
+    agent: deployedAgents.find((a) => a.id === rec.agentId),
+    tasks: warRoomTasks,
+    agentMetrics: computeAgentMetrics(),
+  });
+});
+
+app.post("/api/tactical-corrections/dismiss", (req, res) => {
+  const { recommendationId, id = recommendationId } = req.body;
+  const rec = tacticalCorrections.find((c) => c.id === id);
+  if (!rec) {
+    return res.status(404).json({ error: "Recommendation not found" });
+  }
+  rec.status = "DISMISSED";
+  res.json({ success: true, recommendation: rec });
+});
+
+app.post("/api/tactical-corrections/:id/apply", (req, res) => {
+  const { id } = req.params;
+  const rec = tacticalCorrections.find((c) => c.id === id);
+  if (!rec) {
+    return res.status(404).json({ error: "Tactical correction recommendation not found" });
+  }
+
+  const success = applyTacticalCorrectionInternal(rec, "OPERATOR");
+  if (!success) {
+    return res.status(500).json({ error: "Failed to apply tactical correction" });
+  }
+
+  res.json({
+    success: true,
+    recommendation: rec,
+    agent: deployedAgents.find((a) => a.id === rec.agentId),
+    tasks: warRoomTasks,
+    agentMetrics: computeAgentMetrics(),
+  });
+});
+
+app.post("/api/tactical-corrections/:id/dismiss", (req, res) => {
+  const { id } = req.params;
+  const rec = tacticalCorrections.find((c) => c.id === id);
+  if (!rec) {
+    return res.status(404).json({ error: "Recommendation not found" });
+  }
+  rec.status = "DISMISSED";
+  res.json({ success: true, recommendation: rec });
+});
+
+app.post("/api/tactical-corrections/simulate-failure", (req, res) => {
+  const { agentId = "agent-alpha", failureType = "tool_timeout" } = req.body;
+  const targetAgent = deployedAgents.find((a) => a.id === agentId) || deployedAgents[0];
+
+  let taskTitle = "Autonomous Payload Staging & Raw Socket Relay";
+  let failureError = "Tool execution timeout: termux_shell exceeded 15000ms threshold without response.";
+  let toolChain = ["termux_shell", "nmap"];
+
+  if (failureType === "vector_oom") {
+    taskTitle = "Real-time Vector Embedding Batch Insertion";
+    failureError = "Out of memory in SQLite vector buffer: memory allocation failed in Termux 32-bit heap.";
+    toolChain = ["vector_memory", "code_interpreter"];
+  } else if (failureType === "permission_denied") {
+    taskTitle = "Root Network Interface Monitor (wlan0 Promiscuous Mode)";
+    failureError = "Permission denied: Operation not permitted without root / PRoot isolation.";
+    toolChain = ["termux_shell", "nmap"];
+  }
+
+  const failedTask = {
+    id: `task-sim-${Date.now()}`,
+    title: taskTitle,
+    description: "Simulated stress-test directive for automated Tactical Correction service validation.",
+    priority: "P0_CRITICAL",
+    status: "FAILED",
+    assignedAgentId: targetAgent.id,
+    assignedAgentName: targetAgent.callsign,
+    progressPct: 40,
+    toolChain,
+    steps: [
+      { id: "s1", name: "Spawn subprocess environment", status: "done", detail: "Subprocess spawned" },
+      { id: "s2", name: "Invoke toolchain execution pipeline", status: "failed", detail: failureError },
+    ],
+    createdAt: new Date().toISOString(),
+    executionTimeMs: 15200,
+    error: failureError,
+  };
+
+  warRoomTasks.unshift(failedTask);
+  targetAgent.health = Math.max(30, targetAgent.health - 20);
+
+  // Evaluate to generate correction recommendation immediately
+  evaluateTacticalCorrections();
+
+  res.json({
+    success: true,
+    task: failedTask,
+    agentMetrics: computeAgentMetrics(),
+    recommendations: tacticalCorrections,
+  });
+});
+
 
 // ==========================================
 // HERMES WAR ROOM: COMMUNICATION CHANNELS MONITOR
