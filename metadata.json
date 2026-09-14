@@ -1,0 +1,6 @@
+{
+  "name": "Hermes Agent War Room",
+  "description": "Mobile-optimized Hermes autonomous agent command center with real-time telemetry dashboards, Termux & Moto G5 Stylus workspace, scratchpad reasoning, and cyber-tactical tool orchestration.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
