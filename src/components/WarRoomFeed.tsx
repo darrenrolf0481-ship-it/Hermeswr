@@ -618,6 +618,7 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
               </div>
               <button
                 onClick={() => setShowVoiceGuide(false)}
+                aria-label="Close voice directives guide"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
               >
                 <X className="w-4 h-4" />

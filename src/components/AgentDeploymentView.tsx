@@ -647,6 +647,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
               </div>
               <button
                 onClick={() => setModelSwitchTargetAgent(null)}
+                aria-label="Close model reconfigure dialog"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
               >
                 <X className="w-4 h-4" />
@@ -821,6 +822,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
               </div>
               <button
                 onClick={() => setShowDeployModal(false)}
+                aria-label="Close deploy agent dialog"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
               >
                 <X className="w-4 h-4" />
@@ -831,8 +833,9 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
               {/* Agent Name & Callsign */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 block mb-1">Agent Name *</label>
+                  <label htmlFor="deploy-agent-name" className="text-slate-400 block mb-1">Agent Name *</label>
                   <input
+                    id="deploy-agent-name"
                     type="text"
                     required
                     placeholder="e.g. Echo, Sentinel, Phantom"
@@ -842,8 +845,9 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Tactical Callsign</label>
+                  <label htmlFor="deploy-agent-callsign" className="text-slate-400 block mb-1">Tactical Callsign</label>
                   <input
+                    id="deploy-agent-callsign"
                     type="text"
                     placeholder="e.g. HERMES-ECHO"
                     value={formCallsign}
@@ -907,7 +911,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
               {!useCustomModel ? (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-slate-400">
+                    <label htmlFor="deploy-agent-model" className="text-slate-400">
                       {formProvider === 'openrouter' 
                         ? 'OpenRouter Model Variant' 
                         : formProvider === 'ollama' 
@@ -923,6 +927,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                     </button>
                   </div>
                   <select
+                    id="deploy-agent-model"
                     value={formModel}
                     onChange={(e) => setFormModel(e.target.value)}
                     className="w-full bg-[#080b12] border border-slate-800 focus:border-cyan-500 rounded-lg p-2.5 text-slate-200 focus:outline-none font-mono"
@@ -947,7 +952,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
               ) : (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-slate-400">Custom Model Identifier</label>
+                    <label htmlFor="deploy-agent-custom-model" className="text-slate-400">Custom Model Identifier</label>
                     <button
                       type="button"
                       onClick={() => setUseCustomModel(false)}
@@ -957,6 +962,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                     </button>
                   </div>
                   <input
+                    id="deploy-agent-custom-model"
                     type="text"
                     placeholder={formProvider === 'openrouter' ? 'e.g. meta-llama/llama-3.2-3b-instruct' : 'e.g. deepseek-coder-v2:16b'}
                     value={customModelInput}
@@ -976,6 +982,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                   <span className="text-[10px] text-slate-500">Field Operations</span>
                 </label>
                 <select
+                  aria-label="Tactical specialty"
                   value={formSpecialty}
                   onChange={(e) => setFormSpecialty(e.target.value)}
                   className="w-full bg-[#080b12] border border-slate-800 focus:border-cyan-500 rounded-lg p-2 text-slate-200 focus:outline-none"
@@ -996,6 +1003,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                   <span className="text-[10px] text-emerald-400/80">Codebase Discipline</span>
                 </label>
                 <select
+                  aria-label="Coding specialty"
                   value={formCodingSpecialty}
                   onChange={(e) => setFormCodingSpecialty(e.target.value)}
                   className="w-full bg-[#080b12] border border-slate-800 focus:border-emerald-500 rounded-lg p-2 text-slate-200 focus:outline-none"
@@ -1009,8 +1017,9 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
               {/* Environment and Priority */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 block mb-1">Execution Sandbox</label>
+                  <label htmlFor="deploy-agent-sandbox" className="text-slate-400 block mb-1">Execution Sandbox</label>
                   <select
+                    id="deploy-agent-sandbox"
                     value={formEnvironment}
                     onChange={(e) => setFormEnvironment(e.target.value as any)}
                     className="w-full bg-[#080b12] border border-slate-800 focus:border-cyan-500 rounded-lg p-2 text-slate-200 focus:outline-none"
@@ -1022,8 +1031,9 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-slate-400 block mb-1">Priority Level</label>
+                  <label htmlFor="deploy-agent-priority" className="text-slate-400 block mb-1">Priority Level</label>
                   <select
+                    id="deploy-agent-priority"
                     value={formPriority}
                     onChange={(e) => setFormPriority(e.target.value as any)}
                     className="w-full bg-[#080b12] border border-slate-800 focus:border-cyan-500 rounded-lg p-2 text-slate-200 focus:outline-none"

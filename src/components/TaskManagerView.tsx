@@ -547,6 +547,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
+                aria-label="Close create task dialog"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
               >
                 <X className="w-4 h-4" />
@@ -555,8 +556,9 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
 
             <form onSubmit={handleCreateSubmit} className="space-y-3.5 text-xs font-mono">
               <div>
-                <label className="text-slate-400 block mb-1">Task Directive Title *</label>
+                <label htmlFor="task-title" className="text-slate-400 block mb-1">Task Directive Title *</label>
                 <input
+                  id="task-title"
                   type="text"
                   required
                   placeholder="e.g. Scrape wlan0 Ingress Ports & Dump Logs"
@@ -567,8 +569,9 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Operational Objective / Description</label>
+                <label htmlFor="task-description" className="text-slate-400 block mb-1">Operational Objective / Description</label>
                 <textarea
+                  id="task-description"
                   rows={2}
                   placeholder="Specify task goals, execution bounds, and target nodes..."
                   value={formDescription}
@@ -579,8 +582,9 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 block mb-1">Assignee Agent</label>
+                  <label htmlFor="task-assignee" className="text-slate-400 block mb-1">Assignee Agent</label>
                   <select
+                    id="task-assignee"
                     value={formAgentId}
                     onChange={(e) => setFormAgentId(e.target.value)}
                     className="w-full bg-[#080b12] border border-slate-800 focus:border-cyan-500 rounded-lg p-2 text-slate-200 focus:outline-none"
@@ -594,8 +598,9 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-slate-400 block mb-1">Priority</label>
+                  <label htmlFor="task-priority" className="text-slate-400 block mb-1">Priority</label>
                   <select
+                    id="task-priority"
                     value={formPriority}
                     onChange={(e) => setFormPriority(e.target.value as any)}
                     className="w-full bg-[#080b12] border border-slate-800 focus:border-cyan-500 rounded-lg p-2 text-slate-200 focus:outline-none"
@@ -611,13 +616,14 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
               {/* Tool chain selection */}
               <div>
                 <label className="text-slate-400 block mb-1.5">Required Hermes Tools</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div role="group" aria-label="Required Hermes tools" className="grid grid-cols-2 gap-2">
                   {availableTools.map((tool) => {
                     const isSelected = formTools.includes(tool.id);
                     return (
                       <button
                         type="button"
                         key={tool.id}
+                        aria-pressed={isSelected}
                         onClick={() => handleToggleTool(tool.id)}
                         className={`p-2 rounded-lg border text-left flex items-center justify-between transition-colors ${
                           isSelected
