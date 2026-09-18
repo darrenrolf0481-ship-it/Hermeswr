@@ -692,6 +692,143 @@ async function main() {
       }
     }
 
+    console.log('\n== phone viewport ==');
+    // The app is mobile-oriented, and a control that is comfortable at 1280px
+    // can be a 16px dot on a phone. Swept at 390x844 with touch emulation.
+
+    const phoneTabs = ['command', 'telemetry', 'tasks', 'corrections', 'agents', 'comms', 'tuning', 'terminus', 'recon', 'stylus', 'matrix'];
+    const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+    try {
+      await phone.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 90_000 });
+      await phone.waitForSelector('#nav-tab-recon', { timeout: 60_000 });
+      await phone.waitForTimeout(1200);
+
+      /** Layout health for the current screen at phone width. */
+      const phoneSweep = () =>
+        phone.evaluate((viewportWidth) => {
+          const visible = (element) => {
+            const box = element.getBoundingClientRect();
+            return box.width > 0 && box.height > 0;
+          };
+          const inScroller = (element) => {
+            for (let node = element.parentElement; node; node = node.parentElement) {
+              const overflowX = getComputedStyle(node).overflowX;
+              if (overflowX === 'auto' || overflowX === 'scroll') return true;
+            }
+            return false;
+          };
+          const all = [...document.querySelectorAll('*')].filter(visible);
+
+          const overflowing = all
+            .filter((element) => !inScroller(element))
+            .filter((element) => {
+              const box = element.getBoundingClientRect();
+              return box.right > viewportWidth + 1 || box.left < -1;
+            }).length;
+
+          // A control inside its <label> is tapped through the label.
+          const targets = [
+            ...new Set(
+              all
+                .filter((element) => ['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName))
+                .map((element) => element.closest('label') ?? element)
+            ),
+          ];
+          const small = targets
+            .filter((element) => {
+              const box = element.getBoundingClientRect();
+              return box.height < 24 || box.width < 24;
+            })
+            .map((element) => {
+              const box = element.getBoundingClientRect();
+              return `${element.tagName.toLowerCase()}${element.id ? '#' + element.id : ''} ${Math.round(box.width)}x${Math.round(box.height)}`;
+            });
+
+          const doc = document.documentElement;
+          return {
+            sideways: doc.scrollWidth > doc.clientWidth ? `${doc.scrollWidth} > ${doc.clientWidth}` : null,
+            overflowing,
+            small,
+          };
+        }, 390);
+
+      const sideways = [];
+      const overflowed = [];
+      const undersized = [];
+      for (const tab of phoneTabs) {
+        await phone.click(`#nav-tab-${tab}`);
+        await phone.waitForTimeout(700);
+        const result = await phoneSweep();
+        if (result.sideways) sideways.push(`${tab}: ${result.sideways}`);
+        if (result.overflowing > 0) overflowed.push(`${tab}: ${result.overflowing} element(s)`);
+        result.small.forEach((entry) => undersized.push(`${tab}: ${entry}`));
+      }
+
+      check('no tab scrolls sideways at 390px', sideways.length === 0, sideways.join(' | '));
+      check('no tab overflows the phone viewport', overflowed.length === 0, overflowed.join(' | '));
+      check(
+        'every control is at least 24px on a phone',
+        undersized.length === 0,
+        undersized.slice(0, 4).join(' | ')
+      );
+
+      // The dialogs hold the densest forms in the app, so they get the same sweep.
+      const phoneDialogs = [
+        ['agents', 'button:has-text("DEPLOY NEW AGENT")', 'deploy dialog'],
+        ['tasks', 'button:has-text("CREATE AUTONOMOUS TASK")', 'create task dialog'],
+        ['agents', 'button:has-text("CONFIG MODEL")', 'model hot-swap dialog'],
+      ];
+      const dialogProblems = [];
+      for (const [tab, opener, label] of phoneDialogs) {
+        await phone.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 90_000 });
+        await phone.waitForSelector('#nav-tab-recon', { timeout: 60_000 });
+        await phone.click(`#nav-tab-${tab}`);
+        await phone.waitForTimeout(800);
+        const trigger = phone.locator(opener).first();
+        if ((await trigger.count()) === 0) {
+          dialogProblems.push(`${label}: opener not found`);
+          continue;
+        }
+        await trigger.click();
+        await phone.waitForTimeout(700);
+        const result = await phoneSweep();
+        if (result.sideways) dialogProblems.push(`${label} scrolls sideways`);
+        if (result.overflowing > 0) dialogProblems.push(`${label}: ${result.overflowing} overflowing`);
+        result.small.forEach((entry) => dialogProblems.push(`${label}: ${entry}`));
+      }
+      check(
+        'the dialogs fit a phone and stay tappable',
+        dialogProblems.length === 0,
+        dialogProblems.slice(0, 4).join(' | ')
+      );
+
+      await phone.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 90_000 });
+      await phone.waitForSelector('#nav-tab-recon', { timeout: 60_000 });
+      await phone.click('#nav-tab-tuning');
+      await phone.waitForTimeout(700);
+      const slider = await phone.evaluate(() => {
+        const element = document.querySelector('main input[type="range"]');
+        if (!element) return null;
+        const style = getComputedStyle(element);
+        return {
+          box: Math.round(element.getBoundingClientRect().height),
+          track: Math.round(
+            element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
+          ),
+          clip: style.backgroundClip,
+        };
+      });
+      check('the tuning sliders are tappable', Boolean(slider) && slider.box >= 24, `${slider?.box}px tall`);
+      check(
+        'but their track stays thin',
+        Boolean(slider) && slider.track <= 8 && slider.clip === 'content-box',
+        `track ${slider?.track}px, clip ${slider?.clip}`
+      );
+    } finally {
+      await phone.close().catch(() => {});
+    }
+
     console.log('\n== console health ==');
     check('no uncaught page errors', pageErrors.length === 0, pageErrors.slice(0, 2).join(' | '));
 
