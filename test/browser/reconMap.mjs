@@ -524,6 +524,60 @@ async function main() {
       console.log('  info  no collapsed transition row to exercise');
     }
 
+    console.log('\n== shell: nav and header state ==');
+    // aria-current and the toggle states only change on interaction, so they are
+    // checked here; the render tests pin the attributes themselves.
+
+    await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 90_000 });
+    await page.waitForSelector('#nav-tab-recon', { timeout: 60_000 });
+
+    const currentTabId = () =>
+      page.evaluate(() => document.querySelector('[aria-current="page"]')?.id ?? null);
+
+    await page.click('#nav-tab-comms');
+    await page.waitForTimeout(400);
+    const afterComms = await currentTabId();
+    await page.click('#nav-tab-matrix');
+    await page.waitForTimeout(400);
+    const afterMatrix = await currentTabId();
+
+    check('the dock marks the selected section as current', afterComms === 'nav-tab-comms', String(afterComms));
+    check('the current marker follows the selection', afterMatrix === 'nav-tab-matrix', String(afterMatrix));
+    const currentCount = await page.locator('[aria-current="page"]').count();
+    check('exactly one section is current at a time', currentCount === 1, `${currentCount} marked`);
+
+    const soundButton = page.locator('#btn-toggle-sound');
+    const pressedBefore = await soundButton.getAttribute('aria-pressed');
+    await soundButton.click();
+    await page.waitForTimeout(300);
+    const pressedAfter = await soundButton.getAttribute('aria-pressed');
+    check(
+      'the sound control flips its pressed state',
+      pressedBefore !== null && pressedAfter !== null && pressedBefore !== pressedAfter,
+      `${pressedBefore} -> ${pressedAfter}`
+    );
+    await soundButton.click(); // restore audio for the rest of the run
+    await page.waitForTimeout(200);
+
+    const heartbeat = page.locator('#tactical-heartbeat-monitor');
+    const expandedBefore = await heartbeat.getAttribute('aria-expanded');
+    await heartbeat.click();
+    await page.waitForTimeout(400);
+    const expandedAfter = await heartbeat.getAttribute('aria-expanded');
+    const controls = await heartbeat.getAttribute('aria-controls');
+    check(
+      'the heartbeat monitor flips its expanded state',
+      expandedBefore === 'false' && expandedAfter === 'true',
+      `${expandedBefore} -> ${expandedAfter}`
+    );
+    check(
+      'the expanded monitor points at the panel it revealed',
+      controls === 'heartbeat-diagnostics' && (await page.locator('#heartbeat-diagnostics').count()) === 1,
+      String(controls)
+    );
+    await heartbeat.click(); // collapse it again
+    await page.waitForTimeout(300);
+
     console.log('\n== dialogs: names and labels behind the modals ==');
     // The deploy, hot-swap and create-task forms exist only while their modal is
     // open, so a static render can never reach them. (The voice-directives guide

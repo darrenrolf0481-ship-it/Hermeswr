@@ -41,6 +41,7 @@ import {
   transition,
   tuningConfig,
 } from './fixtures';
+import { keyboardButtons, unfocusableButtons, unnamedControls } from './a11y-helpers';
 
 /** Renders to static markup, failing with the component name if it throws. */
 function render(name: string, element: React.ReactElement): string {
@@ -404,44 +405,6 @@ function allViews(): Array<[string, React.ReactElement]> {
       />,
     ],
   ];
-}
-
-/** True when the control at `index` sits inside a wrapping <label>. */
-function insideLabel(html: string, index: number): boolean {
-  const before = html.slice(0, index);
-  return before.lastIndexOf('<label') > before.lastIndexOf('</label>');
-}
-
-/** Controls that would reach a screen reader with no name at all. */
-function unnamedControls(html: string): string[] {
-  const labelFor = new Set([...html.matchAll(/<label\b[^>]*\sfor="([^"]+)"/g)].map((m) => m[1]));
-  const issues: string[] = [];
-
-  for (const match of html.matchAll(/<(input|select|textarea)\b([^>]*)>/g)) {
-    const attrs = match[2] ?? '';
-    if (/\baria-lab(?:el|elledby)=/.test(attrs)) continue;
-    const id = /\bid="([^"]+)"/.exec(attrs)?.[1];
-    if (id && labelFor.has(id)) continue;
-    if (insideLabel(html, match.index ?? 0)) continue;
-    issues.push(`<${match[1]} ${attrs.trim().slice(0, 80)}>`);
-  }
-
-  return issues;
-}
-
-/** Elements that claim to be buttons but cannot take focus. */
-function unfocusableButtons(html: string): string[] {
-  return [...html.matchAll(/<[a-z][\w-]*\b[^>]*\brole="button"[^>]*>/g)]
-    .map((m) => m[0])
-    .filter((tag) => !/\btabindex="0"/.test(tag))
-    .map((tag) => tag.slice(0, 90));
-}
-
-/** Focusable elements that claim to be buttons. */
-function keyboardButtons(html: string): string[] {
-  return [...html.matchAll(/<[a-z][\w-]*\b[^>]*\brole="button"[^>]*>/g)]
-    .map((m) => m[0])
-    .filter((tag) => /\btabindex="0"/.test(tag));
 }
 
 test('every form control a view renders has an accessible name', () => {
