@@ -50,6 +50,7 @@ import {
 } from 'recharts';
 import { DeviceTelemetry, LogEntry, AgentDeployment, AgentTask, CommChannel, AgentStateTransition } from '../types';
 import { sound } from '../utils/audio';
+import { activationKeyDown } from '../utils/a11y';
 
 interface TelemetryDashboardProps {
   currentTelemetry: DeviceTelemetry;
@@ -415,6 +416,7 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                 <Filter className="w-3 h-3 text-slate-500" />
                 <span className="text-slate-400 text-[10px]">AGENT:</span>
                 <select
+                  aria-label="Filter transitions by agent"
                   value={selectedAgentFilter}
                   onChange={(e) => setSelectedAgentFilter(e.target.value)}
                   className="bg-transparent text-cyan-300 font-bold focus:outline-none cursor-pointer"
@@ -432,6 +434,7 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
               <div className="flex items-center gap-1 bg-[#080b12] px-2 py-1 rounded-lg border border-slate-800 text-[11px] font-mono">
                 <span className="text-slate-400 text-[10px]">TRIGGER:</span>
                 <select
+                  aria-label="Filter transitions by trigger"
                   value={selectedTriggerFilter}
                   onChange={(e) => setSelectedTriggerFilter(e.target.value)}
                   className="bg-transparent text-cyan-300 font-bold focus:outline-none cursor-pointer"
@@ -450,6 +453,7 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                 <Search className="w-3 h-3 text-slate-500 absolute left-2 top-2" />
                 <input
                   type="text"
+                  aria-label="Search state transitions"
                   placeholder="Filter transitions..."
                   value={searchTransitionQuery}
                   onChange={(e) => setSearchTransitionQuery(e.target.value)}
@@ -498,6 +502,10 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
             ) : (
               filteredTransitions.map((tr) => {
                 const isExpanded = expandedTransitionId === tr.id;
+                const toggleExpanded = () => {
+                  sound.click();
+                  setExpandedTransitionId(isExpanded ? null : tr.id);
+                };
                 return (
                   <div
                     key={tr.id}
@@ -509,11 +517,12 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                   >
                     {/* Main Row */}
                     <div 
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isExpanded}
                       className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 cursor-pointer select-none"
-                      onClick={() => {
-                        sound.click();
-                        setExpandedTransitionId(isExpanded ? null : tr.id);
-                      }}
+                      onClick={toggleExpanded}
+                      onKeyDown={activationKeyDown(toggleExpanded)}
                     >
                       {/* Left: Timestamp, Agent, & State Transition Badges */}
                       <div className="flex flex-wrap items-center gap-2">
@@ -881,6 +890,7 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                   <Search className="w-3 h-3 text-slate-500 absolute left-2 top-2" />
                   <input
                     type="text"
+                    aria-label="Search tactical logs"
                     placeholder="Search logs..."
                     value={searchLogQuery}
                     onChange={(e) => setSearchLogQuery(e.target.value)}

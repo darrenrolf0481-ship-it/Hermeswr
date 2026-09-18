@@ -190,6 +190,7 @@ export const PerformanceTuningView: React.FC<PerformanceTuningViewProps> = ({
           </div>
           <input
             type="range"
+            aria-label="Sampling temperature"
             min="0"
             max="1"
             step="0.05"
@@ -215,6 +216,7 @@ export const PerformanceTuningView: React.FC<PerformanceTuningViewProps> = ({
           </div>
           <input
             type="range"
+            aria-label="Top-P nucleus sampling"
             min="0.5"
             max="1.0"
             step="0.05"
@@ -240,6 +242,7 @@ export const PerformanceTuningView: React.FC<PerformanceTuningViewProps> = ({
           </div>
           <input
             type="range"
+            aria-label="Max scratchpad reasoning steps"
             min="1"
             max="12"
             step="1"
@@ -264,6 +267,7 @@ export const PerformanceTuningView: React.FC<PerformanceTuningViewProps> = ({
             </span>
           </div>
           <select
+            aria-label="Context budget in tokens"
             value={localConfig.contextLimitTokens}
             onChange={(e) => handleSliderChange('contextLimitTokens', parseInt(e.target.value))}
             className="w-full bg-[#080b12] border border-slate-800 focus:border-cyan-500 rounded-lg p-2 text-xs font-mono text-slate-200 focus:outline-none"
@@ -294,6 +298,7 @@ export const PerformanceTuningView: React.FC<PerformanceTuningViewProps> = ({
               Linux Process Priority (<code className="text-cyan-300">nice -n</code>)
             </span>
             <select
+              aria-label="Linux process priority (nice)"
               value={localConfig.nicePriority}
               onChange={(e) => handleSliderChange('nicePriority', parseInt(e.target.value))}
               className="w-full bg-[#0f1420] border border-slate-700 rounded p-1.5 text-xs font-mono text-slate-200"
@@ -314,6 +319,7 @@ export const PerformanceTuningView: React.FC<PerformanceTuningViewProps> = ({
               5000mAh Battery Profile
             </span>
             <select
+              aria-label="Battery profile"
               value={localConfig.batteryProfile}
               onChange={(e) => handleSliderChange('batteryProfile', e.target.value as any)}
               className="w-full bg-[#0f1420] border border-slate-700 rounded p-1.5 text-xs font-mono text-slate-200"
@@ -333,6 +339,7 @@ export const PerformanceTuningView: React.FC<PerformanceTuningViewProps> = ({
               Autonomous Tool Timeout
             </span>
             <select
+              aria-label="Autonomous tool timeout"
               value={localConfig.toolTimeoutMs}
               onChange={(e) => handleSliderChange('toolTimeoutMs', parseInt(e.target.value))}
               className="w-full bg-[#0f1420] border border-slate-700 rounded p-1.5 text-xs font-mono text-slate-200"

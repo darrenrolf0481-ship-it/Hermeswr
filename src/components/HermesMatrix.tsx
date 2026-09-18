@@ -136,6 +136,7 @@ export const HermesMatrix: React.FC<HermesMatrixProps> = ({
         </div>
         <input
           type="range"
+          aria-label="Sampling temperature"
           min="0"
           max="1"
           step="0.05"
@@ -196,6 +197,7 @@ export const HermesMatrix: React.FC<HermesMatrixProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <input
               type="text"
+              aria-label="Memory key"
               placeholder="Key (e.g. TARGET_IP)..."
               value={newKey}
               onChange={(e) => setNewKey(e.target.value)}
@@ -203,12 +205,14 @@ export const HermesMatrix: React.FC<HermesMatrixProps> = ({
             />
             <input
               type="text"
+              aria-label="Memory value"
               placeholder="Value / Context data..."
               value={newValue}
               onChange={(e) => setNewValue(e.target.value)}
               className="bg-[#090d16] border border-slate-800 focus:border-purple-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-100 placeholder:text-slate-600 focus:outline-none"
             />
             <select
+              aria-label="Memory category"
               value={newCat}
               onChange={(e) => setNewCat(e.target.value as any)}
               className="bg-[#090d16] border border-slate-800 focus:border-purple-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-300 focus:outline-none"

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { CommChannel, CommPacket } from '../types';
 import { sound } from '../utils/audio';
+import { activationKeyDown } from '../utils/a11y';
 
 interface CommChannelsViewProps {
   channels: CommChannel[];
@@ -132,13 +133,18 @@ export const CommChannelsView: React.FC<CommChannelsViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {channels.map((chan) => {
           const isSelected = selectedChannelId === chan.id;
+          const selectChannel = () => {
+            sound.click();
+            setSelectedChannelId(chan.id);
+          };
           return (
             <div
               key={chan.id}
-              onClick={() => {
-                sound.click();
-                setSelectedChannelId(chan.id);
-              }}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isSelected}
+              onClick={selectChannel}
+              onKeyDown={activationKeyDown(selectChannel)}
               className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
                 isSelected
                   ? 'bg-cyan-950/40 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.18)]'
@@ -201,8 +207,9 @@ export const CommChannelsView: React.FC<CommChannelsViewProps> = ({
         <form onSubmit={handleBroadcast} className="p-3 rounded-lg bg-[#090d16] border border-cyan-950 space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono">
             <div>
-              <label className="text-slate-500 block text-[10px] mb-1">Origin Entity</label>
+              <label htmlFor="comm-origin-entity" className="text-slate-500 block text-[10px] mb-1">Origin Entity</label>
               <select
+                id="comm-origin-entity"
                 value={sender}
                 onChange={(e) => setSender(e.target.value)}
                 className="w-full bg-[#0d121c] border border-slate-800 focus:border-cyan-500 rounded px-2 py-1 text-slate-200"
@@ -216,8 +223,9 @@ export const CommChannelsView: React.FC<CommChannelsViewProps> = ({
             </div>
 
             <div>
-              <label className="text-slate-500 block text-[10px] mb-1">Target Entity</label>
+              <label htmlFor="comm-target-entity" className="text-slate-500 block text-[10px] mb-1">Target Entity</label>
               <select
+                id="comm-target-entity"
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
                 className="w-full bg-[#0d121c] border border-slate-800 focus:border-cyan-500 rounded px-2 py-1 text-slate-200"
@@ -241,6 +249,7 @@ export const CommChannelsView: React.FC<CommChannelsViewProps> = ({
           <div className="flex items-center gap-2">
             <input
               type="text"
+              aria-label="Inject tactical message or telemetry probe payload"
               placeholder="Inject tactical message or telemetry probe payload..."
               value={testPayload}
               onChange={(e) => setTestPayload(e.target.value)}

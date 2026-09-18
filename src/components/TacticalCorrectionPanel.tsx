@@ -219,6 +219,7 @@ export const TacticalCorrectionPanel: React.FC<TacticalCorrectionPanelProps> = (
             <label className="flex items-center gap-2 cursor-pointer text-xs font-mono text-slate-300">
               <input
                 type="checkbox"
+                aria-label="Auto-re-queue failed tasks upon reconfiguration"
                 checked={config.autoRetryFailedTasks}
                 onChange={(e) => {
                   sound.click();
@@ -243,6 +244,7 @@ export const TacticalCorrectionPanel: React.FC<TacticalCorrectionPanelProps> = (
           </span>
           <div className="flex items-center gap-2">
             <select
+              aria-label="Agent to inject failure into"
               value={selectedAgentForSim}
               onChange={(e) => setSelectedAgentForSim(e.target.value)}
               className="flex-1 bg-[#080b12] border border-slate-800 rounded-lg px-2 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -254,6 +256,7 @@ export const TacticalCorrectionPanel: React.FC<TacticalCorrectionPanelProps> = (
               ))}
             </select>
             <select
+              aria-label="Failure type to simulate"
               value={simFailureType}
               onChange={(e) => setSimFailureType(e.target.value)}
               className="flex-1 bg-[#080b12] border border-slate-800 rounded-lg px-2 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"

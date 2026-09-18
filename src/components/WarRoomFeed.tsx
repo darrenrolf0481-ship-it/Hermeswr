@@ -565,6 +565,7 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
           <textarea
             ref={textareaRef}
             id="warroom-prompt-input"
+            aria-label="Operator prompt"
             rows={1}
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}

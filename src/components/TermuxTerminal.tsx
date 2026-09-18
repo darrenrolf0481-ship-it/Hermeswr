@@ -272,6 +272,7 @@ System ready. Tool hooks: termux_shell, python_interpreter, vector_memory, recon
           ref={inputRef}
           id="termux-cli-input"
           type="text"
+          aria-label="Termux command"
           value={inputVal}
           onChange={(e) => setInputVal(e.target.value)}
           onKeyDown={handleKeyDown}

@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { AgentDeployment, AgentMetrics, TacticalCorrectionRecommendation } from '../types';
 import { sound } from '../utils/audio';
+import { activationKeyDown } from '../utils/a11y';
 import { 
   OPENROUTER_MODELS, 
   OLLAMA_CLOUD_MODELS, 
@@ -90,6 +91,12 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
   const [modelSwitchTargetAgent, setModelSwitchTargetAgent] = useState<AgentDeployment | null>(null);
   const [switchProvider, setSwitchProvider] = useState<'hermes' | 'openrouter' | 'ollama'>('openrouter');
   const [selectedSwitchModel, setSelectedSwitchModel] = useState<string>('');
+
+  /** Picks a model preset for the pending hot-swap (shared by click and keyboard). */
+  const selectSwitchModel = (id: string) => {
+    sound.click();
+    setSelectedSwitchModel(id);
+  };
   const [customSwitchModel, setCustomSwitchModel] = useState('');
   const [useCustomSwitch, setUseCustomSwitch] = useState(false);
   const [isSwitchingModel, setIsSwitchingModel] = useState(false);
@@ -390,6 +397,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
         <div className="w-full md:w-72">
           <input
             type="text"
+            aria-label="Search agents by callsign, model, tactical and coding specialty"
             placeholder="Search callsign, model, tactical & coding..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -716,10 +724,11 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                   {currentSwitchProviderModels.map((m) => (
                     <div
                       key={m.id}
-                      onClick={() => {
-                        sound.click();
-                        setSelectedSwitchModel(m.id);
-                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={selectedSwitchModel === m.id}
+                      onClick={() => selectSwitchModel(m.id)}
+                      onKeyDown={activationKeyDown(() => selectSwitchModel(m.id))}
                       className={`p-2.5 rounded-lg border cursor-pointer transition-all ${
                         selectedSwitchModel === m.id
                           ? 'bg-cyan-950/60 border-cyan-500 text-slate-100 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
