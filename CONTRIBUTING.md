@@ -79,6 +79,11 @@ Treat this as part of the contract:
   (`aria-pressed` / `aria-expanded`), and a key handler built with
   `activationKeyDown` from `src/utils/a11y.ts` so Enter and Space both work.
 - Decorative icons and SVG overlays are `aria-hidden`.
+- A modal dialog carries `role="dialog"`, `aria-modal="true"`, an
+  `aria-labelledby` pointing at its heading, `tabIndex={-1}` on the panel, and
+  `useDialogFocus` from `src/hooks/useDialogFocus.ts`. Dialogs render as siblings
+  of the shell, so without that hook the nav dock stays in the tab order and Tab
+  walks straight out of a dialog that only *looks* modal.
 
 `test/views.test.tsx` enforces the first two points across every tab, the same
 helpers in `test/a11y-helpers.ts` cover the header and nav dock in
