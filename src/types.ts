@@ -231,7 +231,8 @@ export type WarRoomTab =
   | 'telemetry' 
   | 'comms' 
   | 'tuning' 
-  | 'termux' 
+  | 'terminus' 
   | 'stylus' 
-  | 'matrix';
+  | 'matrix'
+  | 'recon';
 

@@ -9,7 +9,9 @@ import {
   CheckSquare,
   Radio,
   Sliders,
-  Wrench
+  Wrench,
+  Map,
+  Scan
 } from 'lucide-react';
 import { WarRoomTab } from '../types';
 import { sound } from '../utils/audio';
@@ -41,7 +43,8 @@ export const NavigationDock: React.FC<NavigationDockProps> = ({
     { id: 'agents', label: 'DEPLOYMENT', icon: Users },
     { id: 'comms', label: 'COMMS MESH', icon: Radio },
     { id: 'tuning', label: 'TUNING', icon: Sliders },
-    { id: 'termux', label: 'TERMUX CLI', icon: Terminal },
+    { id: 'terminus', label: 'TERMUX CLI', icon: Terminal },
+    { id: 'recon', label: 'RECON', icon: Scan },
     { id: 'stylus', label: 'STYLUS PAD', icon: PenTool },
     { id: 'matrix', label: 'MATRIX', icon: Layers },
   ];

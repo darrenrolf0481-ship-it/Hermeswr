@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   WarRoomTab, 
   AgentState, 
@@ -17,6 +17,7 @@ import {
   TacticalCorrectionConfig
 } from './types';
 import { TacticalHeader } from './components/TacticalHeader';
+import { ReconView } from './components/ReconView';
 import { NavigationDock } from './components/NavigationDock';
 import { WarRoomFeed } from './components/WarRoomFeed';
 import { TelemetryDashboard } from './components/TelemetryDashboard';
@@ -27,6 +28,19 @@ import { AgentDeploymentView } from './components/AgentDeploymentView';
 import { TaskManagerView } from './components/TaskManagerView';
 import { CommChannelsView } from './components/CommChannelsView';
 import { PerformanceTuningView } from './components/PerformanceTuningView';
+import { DiscoveredHost } from './utils/topology';
+import {
+  ReconHistoryEntry,
+  loadReconHistory,
+  pushReconHistory,
+  saveReconHistory,
+} from './utils/reconHistory';
+import {
+  WATCH_POLL_INTERVAL_MS,
+  loadWatchList,
+  saveWatchList,
+  toggleWatchList,
+} from './utils/watchList';
 import { TacticalCorrectionPanel } from './components/TacticalCorrectionPanel';
 import { sound } from './utils/audio';
 
@@ -281,6 +295,132 @@ export default function App() {
       ],
     },
   ]);
+
+  // Recon scan results
+  const [reconResults, setReconResults] = useState<{
+    scanType: string;
+    results: string;
+    timestamp: string;
+    status: 'idle' | 'scanning' | 'complete' | 'error';
+  }>({ scanType: '', results: '', timestamp: '', status: 'idle' });
+
+  // Hosts discovered by the last live probe, used to draw the topology map
+  const [reconHosts, setReconHosts] = useState<DiscoveredHost[]>([]);
+  const [reconLocalAddresses, setReconLocalAddresses] = useState<string[]>([]);
+
+  // Scan history log (most recent first), restored from the previous session
+  const [reconHistory, setReconHistory] = useState<ReconHistoryEntry[]>(() => loadReconHistory());
+
+  useEffect(() => {
+    saveReconHistory(reconHistory);
+  }, [reconHistory]);
+
+  const handleRunReconScan = async (scanType: string) => {
+    sound.dispatch();
+    const startedAt = Date.now();
+    setReconResults({ scanType, results: '', timestamp: new Date().toISOString(), status: 'scanning' });
+
+    const record = (status: 'complete' | 'error', executionTimeMs = Date.now() - startedAt) => {
+      setReconHistory((prev) =>
+        pushReconHistory(prev, {
+          id: `scan-${Date.now()}`,
+          scanType,
+          timestamp: new Date().toISOString(),
+          status,
+          executionTimeMs,
+        })
+      );
+    };
+
+    try {
+      const res = await fetch('/api/recon/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scanType }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setReconResults({ scanType, results: data.results || data.output || 'Scan completed.', timestamp: new Date().toISOString(), status: 'complete' });
+        // Only the subnet-map scan owns the topology map. Narrower scans probe a
+        // handful of hosts (a port scan touches one), and letting them replace the
+        // map would silently shrink a discovered subnet down to that handful.
+        if (scanType === 'network-map' && Array.isArray(data.hosts) && data.hosts.length > 0) {
+          setReconHosts(data.hosts);
+          setReconLocalAddresses(Array.isArray(data.localAddresses) ? data.localAddresses : []);
+        }
+        record('complete', data.executionTimeMs);
+        addLog('TACTICAL', 'RECON', `Scan executed: ${scanType}`);
+      } else {
+        setReconResults({ scanType, results: data.error || 'Scan failed.', timestamp: new Date().toISOString(), status: 'error' });
+        record('error');
+      }
+    } catch {
+      setReconResults({ scanType, results: 'Network error during scan.', timestamp: new Date().toISOString(), status: 'error' });
+      record('error');
+    }
+  };
+
+  const fetchReconResults = async () => {
+    // Re-run last scan type if exists
+    if (reconResults.scanType) {
+      await handleRunReconScan(reconResults.scanType);
+    }
+  };
+
+  // Watch list: hosts the operator wants re-probed on a timer
+  const [watchedHosts, setWatchedHosts] = useState<string[]>(() => loadWatchList());
+  // Raw probe results; the panel derives per-host status from them.
+  const [watchProbes, setWatchProbes] = useState<DiscoveredHost[]>([]);
+  const [watchProbedAt, setWatchProbedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    saveWatchList(watchedHosts);
+  }, [watchedHosts]);
+
+  const toggleWatchedHost = (host: string) => {
+    sound.click();
+    setWatchedHosts((prev) => toggleWatchList(prev, host));
+    addLog('TACTICAL', 'RECON', `${watchedHosts.includes(host) ? 'Stopped watching' : 'Now watching'} ${host}`);
+  };
+
+  const probeWatchedHosts = useCallback(async () => {
+    if (watchedHosts.length === 0) {
+      setWatchProbes([]);
+      return;
+    }
+    try {
+      const res = await fetch('/api/recon/probe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hosts: watchedHosts }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setWatchProbes(Array.isArray(data.hosts) ? data.hosts : []);
+      setWatchProbedAt(data.probedAt ?? new Date().toISOString());
+    } catch {
+      // Keep the previous statuses; the next tick retries.
+    }
+  }, [watchedHosts]);
+
+  // Poll only while the recon panel is open, so watching hosts never generates
+  // background traffic the operator cannot see.
+  useEffect(() => {
+    if (activeTab !== 'recon' || watchedHosts.length === 0) return;
+    void probeWatchedHosts();
+    const timer = setInterval(() => void probeWatchedHosts(), WATCH_POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [activeTab, watchedHosts.length, probeWatchedHosts]);
+
+  // Discover the local subnet the first time RECON is opened, so the topology
+  // map is populated without the operator having to run a scan by hand.
+  const reconAutoScanned = useRef(false);
+  useEffect(() => {
+    if (activeTab !== 'recon' || reconAutoScanned.current) return;
+    reconAutoScanned.current = true;
+    void handleRunReconScan('network-map');
+    // Only ever fires once per session; handleRunReconScan is stable enough for this.
+  }, [activeTab]);
 
   // Tuning Configuration
   const [tuningConfig, setTuningConfig] = useState<TuningConfig>({
@@ -1185,7 +1325,26 @@ Awaiting operator directives.`,
           />
         )}
 
-        {activeTab === 'termux' && <TermuxTerminal />}
+        {activeTab === 'terminus' && <TermuxTerminal />}
+
+      {activeTab === 'recon' && (
+        <ReconView
+          agents={deployedAgents}
+          channels={channels}
+          tasks={tasks}
+          reconResults={reconResults}
+          reconHistory={reconHistory}
+          reconHosts={reconHosts}
+          reconLocalAddresses={reconLocalAddresses}
+          watchedHosts={watchedHosts}
+          watchProbes={watchProbes}
+          watchProbedAt={watchProbedAt}
+          onToggleWatch={toggleWatchedHost}
+          onProbeWatched={() => void probeWatchedHosts()}
+          onRunScan={(scanType) => handleRunReconScan(scanType)}
+          onRefreshScan={() => fetchReconResults()}
+        />
+      )}
 
         {activeTab === 'stylus' && (
           <StylusCanvas

@@ -58,6 +58,16 @@
   animation: radar-sweep 4s linear infinite;
 }
 
+/* Slow continuous rotation for the tactical radar sweep */
+@keyframes spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 4s linear infinite;
+}
+
 /* Canvas styling for Moto G5 stylus */
 .stylus-canvas {
   touch-action: none;

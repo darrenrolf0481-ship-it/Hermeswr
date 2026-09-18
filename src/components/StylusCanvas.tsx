@@ -24,13 +24,66 @@ interface StrokePoint {
   x: number;
   y: number;
   pressure: number;
+  time: number;
 }
 
 interface Stroke {
   points: StrokePoint[];
   color: string;
-  width: number;
+  baseWidth: number;
   type: 'pen' | 'highlighter' | 'eraser';
+}
+
+// Smoothing factor for interpolation (lower = smoother but more performance)
+const SMOOTH_FACTOR = 0.3;
+
+/**
+ * Smooth a stroke by interpolating between points and removing jitter
+ */
+function smoothStroke(points: StrokePoint[]): StrokePoint[] {
+  if (points.length < 3) return points;
+  
+  const smoothed: StrokePoint[] = [points[0]];
+  
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const next = points[i + 1];
+    
+    // Calculate velocity based on time delta
+    const dt1 = (curr.time - prev.time) || 16;
+    const dt2 = (next.time - curr.time) || 16;
+    
+    // Simple moving average for smoothing
+    const avgX = (prev.x + curr.x + next.x) / 3;
+    const avgY = (prev.y + curr.y + next.y) / 3;
+    
+    // Blend between original and smoothed based on SMOOTH_FACTOR
+    const blendX = prev.x + (avgX - prev.x) * SMOOTH_FACTOR;
+    const blendY = prev.y + (avgY - prev.y) * SMOOTH_FACTOR;
+    
+    smoothed.push({
+      x: blendX,
+      y: blendY,
+      pressure: curr.pressure,
+      time: curr.time,
+    });
+  }
+  
+  smoothed.push(points[points.length - 1]);
+  return smoothed;
+}
+
+/**
+ * Calculate interpolated point between two points with variable width based on pressure
+ */
+function getInterpolatedPoint(p1: StrokePoint, p2: StrokePoint, t: number): StrokePoint {
+  return {
+    x: p1.x + (p2.x - p1.x) * t,
+    y: p1.y + (p2.y - p1.y) * t,
+    pressure: p1.pressure + (p2.pressure - p1.pressure) * t,
+    time: 0,
+  };
 }
 
 export const StylusCanvas: React.FC<StylusCanvasProps> = ({
@@ -118,31 +171,51 @@ export const StylusCanvas: React.FC<StylusCanvasProps> = ({
     const all = currentStroke ? [...strokes, currentStroke] : strokes;
     all.forEach((s) => {
       if (s.points.length < 2) return;
+      
+      // Smooth the stroke for better quality
+      const smoothedPoints = smoothStroke(s.points);
+      
       ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(s.points[0].x, s.points[0].y);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
       if (s.type === 'eraser') {
         ctx.globalCompositeOperation = 'destination-out';
-        ctx.lineWidth = s.width * 4;
+        ctx.strokeStyle = 'rgba(0,0,0,1)';
       } else if (s.type === 'highlighter') {
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 0.35;
         ctx.strokeStyle = s.color;
-        ctx.lineWidth = s.width * 3;
       } else {
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = s.color;
-        ctx.lineWidth = s.width;
       }
 
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      for (let i = 1; i < s.points.length; i++) {
-        ctx.lineTo(s.points[i].x, s.points[i].y);
+      // Draw smoothed stroke with variable width based on pressure
+      for (let i = 1; i < smoothedPoints.length; i++) {
+        const p1 = smoothedPoints[i - 1];
+        const p2 = smoothedPoints[i];
+        
+        // Calculate width based on pressure and tool type
+        let width: number;
+        if (s.type === 'eraser') {
+          width = s.baseWidth * 4 * p2.pressure;
+        } else if (s.type === 'highlighter') {
+          width = s.baseWidth * 3 * (0.5 + p2.pressure * 0.5);
+        } else {
+          // Pen: width varies with pressure for natural feel
+          width = s.baseWidth * (0.6 + p2.pressure * 0.8);
+        }
+        
+        ctx.lineWidth = width;
+        
+        // Draw segment
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
       }
-      ctx.stroke();
+      
       ctx.restore();
     });
   };
@@ -161,9 +234,9 @@ export const StylusCanvas: React.FC<StylusCanvasProps> = ({
 
     setIsDrawing(true);
     setCurrentStroke({
-      points: [{ x, y, pressure }],
+      points: [{ x, y, pressure, time: performance.now() }],
       color: selectedColor,
-      width: strokeWidth * (pressure ? Math.max(0.6, pressure * 1.5) : 1),
+      baseWidth: strokeWidth,
       type: activeTool,
     });
   };
@@ -177,9 +250,22 @@ export const StylusCanvas: React.FC<StylusCanvasProps> = ({
 
     setCurrentStroke((prev) => {
       if (!prev) return null;
+      
+      // Skip points that are too close (reduces jitter)
+      const lastPoint = prev.points[prev.points.length - 1];
+      const distance = Math.sqrt((x - lastPoint.x) ** 2 + (y - lastPoint.y) ** 2);
+      
+      // Only add point if moved more than 1px or pressure changed significantly
+      if (distance < 1 && Math.abs(pressure - lastPoint.pressure) < 0.05) {
+        // Update the last point's position for smoother tracking
+        const updatedPoints = [...prev.points];
+        updatedPoints[updatedPoints.length - 1] = { x, y, pressure, time: performance.now() };
+        return { ...prev, points: updatedPoints };
+      }
+      
       return {
         ...prev,
-        points: [...prev.points, { x, y, pressure }],
+        points: [...prev.points, { x, y, pressure, time: performance.now() }],
       };
     });
   };
@@ -196,6 +282,14 @@ export const StylusCanvas: React.FC<StylusCanvasProps> = ({
       if (canvasRef.current) {
         onSaveSketch(canvasRef.current.toDataURL('image/png'));
       }
+    }
+  };
+
+  // Touch-action for stylus pressure support
+  const handlePointerEnter = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Ensure pointer capture for stylus devices
+    if (e.pointerType === 'pen' || e.pointerType === 'touch') {
+      e.currentTarget.setPointerCapture(e.pointerId);
     }
   };
 
@@ -370,7 +464,9 @@ export const StylusCanvas: React.FC<StylusCanvasProps> = ({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
+          onPointerEnter={handlePointerEnter}
           className="stylus-canvas w-full h-full cursor-crosshair"
+          style={{ touchAction: 'none' }}
         />
 
         {/* Tactical Overlay Crosshairs */}

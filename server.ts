@@ -3,12 +3,71 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import net from "net";
+import os from "os";
+
+// ---- Live network probing utilities (zero-dependency TCP connect checks) ----
+function probePort(host: string, port: number, timeoutMs = 800): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+    const finish = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+    socket.connect(port, host);
+  });
+}
+
+async function probeHostReachability(host: string, ports: number[], timeoutMs = 800): Promise<number[]> {
+  const results = await Promise.all(ports.map((p) => probePort(host, p, timeoutMs)));
+  return ports.filter((_, i) => results[i]);
+}
+
+/** Non-internal IPv4 addresses of this machine, used to tag the local node on the map. */
+function localIPv4Addresses(): string[] {
+  const addresses: string[] = [];
+  try {
+    for (const infos of Object.values(os.networkInterfaces())) {
+      for (const info of infos ?? []) {
+        if (info.family === "IPv4" && !info.internal) addresses.push(info.address);
+      }
+    }
+  } catch {
+    // Interfaces unavailable — the map falls back to the static baseline.
+  }
+  return addresses;
+}
+
+interface DiscoveredHost {
+  host: string;
+  openPorts: number[];
+  online: boolean;
+}
+
+/** Ports checked for hosts on the watch list. */
+const WATCH_PROBE_PORTS = [22, 80, 443, 3000, 5173, 8080];
+/** Upper bound on a single watch-list probe request. */
+const WATCH_PROBE_MAX_HOSTS = 16;
+
+/** Strict dotted-quad check, so a probe request can never target a hostname. */
+function isIPv4(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const parts = value.split(".");
+  return parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: "25mb" }));
 
@@ -83,7 +142,20 @@ app.post("/api/termux/exec", (req, res) => {
   let output = "";
   let exitCode = 0;
 
-  if (trimmed === "termux-battery-status") {
+  // Special commands that should use simulated output (security/safety)
+  const simulatedCommands = [
+    'termux-battery-status',
+    'termux-wifi-connectioninfo',
+    'pkg install',
+    'apt install',
+    'apt upgrade',
+  ];
+
+  const isSimulated = simulatedCommands.some(cmd => trimmed === cmd || trimmed.startsWith(cmd));
+
+  if (isSimulated) {
+    // Use simulated output for safety
+    if (trimmed === "termux-battery-status") {
     output = JSON.stringify(
       {
         health: "GOOD",
@@ -152,12 +224,171 @@ Status: ONLINE | Target: Termux aarch64
 Active Sub-Agents: Alpha (Recon), Bravo (Code), Delta (Audit)
 Scratchpad reasoning: ENABLED | XML Tool Calling: ACTIVE
 ================================================`;
-  } else {
-    output = `[termux@moto-g5-stylus ~]$ ${trimmed}\nCommand executed successfully in Termux subsystem. (PID ${Math.floor(
-      Math.random() * 3000 + 4000
-    )})`;
-  }
+    } else {
+      // For other commands, generate realistic simulated output based on command type
+      if (trimmed.startsWith('ls')) {
+        output = `total 48\ndrwxrwx--- 1 u0_a248 u0_a248    4096 Sep 13 18:40 .\ndrwxrwx--- 1 u0_a248 u0_a248    4096 Sep 13 18:00 ..\n-rw-rw---- 1 u0_a248 u0_a248     220 Sep 13 18:00 .bashrc\n-rw-rw---- 1 u0_a248 u0_a248     807 Sep 13 18:00 .profile\ndrwxrwx--- 1 u0_a248 u0_a248    4096 Sep 13 18:42 hermes\ndrwxrwx--- 1 u0_a248 u0_a248    4096 Sep 13 18:30 termux-tools\n-rwxrwx--- 1 u0_a248 u0_a248    1543 Sep 13 18:45 hermes-daemon.py\n`;
+      } else if (trimmed.startsWith('cat ')) {
+        output = `# Hermes War Room Configuration\nAGENT_CALLSIGN=HERMES-ALPHA\nNETWORK_INTERFACE=wlan0\nTELEMETRY_PORT=3000\nENCRYPTED_UPLINK=true\nBATTERY_PROFILE=BALANCED_TACTICAL\n`;
+      } else if (trimmed.startsWith('echo ')) {
+        output = trimmed.slice(5);
+      } else if (trimmed.startsWith('pwd')) {
+        output = '/data/data/com.termux/files/home';
+      } else if (trimmed.startsWith('whoami')) {
+        output = 'u0_a248';
+      } else if (trimmed.startsWith('hostname')) {
+        output = 'moto-g5-stylus';
+      } else if (trimmed.startsWith('ifconfig') || trimmed.startsWith('ip addr')) {
+        output = `wlan0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n        inet 192.168.1.139  netmask 255.255.255.0  broadcast 192.168.1.255\n        inet6 fe80::200:ff:fe00:0  prefixlen 64  scopeid 0x20<link>\n        ether 68:d7:9a:31:ec:04  txqueuelen 1000  (Ethernet)\n        RX packets 15234  bytes 18456789 (17.6 MiB)\n        TX packets 9876  bytes 1234567 (1.1 MiB)\nlo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n        inet 127.0.0.1  netmask 255.0.0.0\n        loop  txqueuelen 1000  (Local Loopback)\n`;
+      } else if (trimmed.startsWith('df')) {
+        output = `Filesystem      Size  Used Avail Use% Mounted on\n/dev/root        128G   48G   76G  39% /data/data/com.termux/files\ntmpfs            3.8G  1.2M  3.8G   1% /dev\ntmpfs            3.8G     0  3.8G   0% /dev/shm\n`;
+      } else if (trimmed.startsWith('free')) {
+        output = `               total        used        free      shared  buff/cache   available\nMem:        8192000     4890120     1245680      234560     2056200     2890120\nSwap:       2097152       51200     2045952\n`;
+      } else if (trimmed.startsWith('netstat') || trimmed.startsWith('ss')) {
+        output = `Active Internet connections (servers and established)\nProto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name\ntcp        0      0 127.0.0.1:3000          0.0.0.0:*               LISTEN      4120/hermes-daemon\ntcp        0      0 192.168.1.139:5173     0.0.0.0:*               LISTEN      4129/termux-node\ntcp        0      0 192.168.1.139:41234    192.168.1.1:443        ESTABLISHED 4150/python3\ntcp6       0      0 :::8080                 :::*                    LISTEN      4201/node\n`;
+      } else if (trimmed.startsWith('grep')) {
+        output = `HERMES_C2_ACTIVE=true\nTERMINAL_SESSION=pts/0\nAGENT_HEARTBEAT=52.4toks\n`;
+      } else if (trimmed.startsWith('kill')) {
+        exitCode = 0;
+        output = `Process terminated successfully. (Signal: SIGTERM)`;
+    } else if (trimmed === ' reboot' || trimmed === 'shutdown') {
+      exitCode = 1;
+      output = `sh: systemctl: command not found (Termux restricted: system reboot requires root)`;
+    } else if (trimmed.startsWith('ssh')) {
+      if (trimmed.startsWith('ssh -V') || trimmed === 'ssh -v') {
+        output = `OpenSSH_9.4p1, LibreSSL 3.3.6
+configured with: --with-ssl=openssl`;
+      } else if (trimmed.startsWith('ssh ')) {
+        output = `Hermes@C2-GATEWAY: Permission denied (publickey).
+Connection closed by 192.168.1.1 port 22
+`;
+      } else {
+        output = `usage: ssh [-46AaCfGgKkMNnqsTtVvXxYy] [-B bind_interface]
+           [-b bind_address] [-c cipher_spec] [-D [bind_address:]port]
+           [-E log_file] [-e escape_char] [-F configfile] [-I pkcs11]
+           [-i identity_file] [-J [user@]host[:port]] [-L address]
+           [-l login_name] [-M] [-m mac_spec] [-O ctl_cmd] [-o option]
+           [-p port] [-Q query_options] [-R address] [-S ctl_path]
+           [-W host:port] [-w local_tun[:remote_tun]]
+           [user@]hostname [command]`;
+      }
+    } else if (trimmed.startsWith('curl') || trimmed.startsWith('wget')) {
+      if (trimmed.includes('gemini') || trimmed.includes('google')) {
+        output = `{"candidates":[{"content":{"parts":[{"text":"Hermes-3 response synthesized via Gemini API"}]}}]}`;
+      } else if (trimmed.includes('http') || trimmed.includes('https')) {
+        output = `HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 128
+Date: ${new Date().toUTCString()}
 
+{"status":"ok","device":"Moto G5 Stylus","env":"Termux aarch64"}`;
+      } else {
+        output = `[termux@moto-g5-stylus ~]$ ${trimmed}
+curl: no URL specified!
+usage: curl [options...] <url>`;
+      }
+    } else if (trimmed.startsWith('ping')) {
+      const target = trimmed.split(' ')[1] || '192.168.1.1';
+      output = `PING ${target}: 56 data bytes
+64 bytes from ${target}: icmp_seq=0 ttl=64 time=2.34 ms
+64 bytes from ${target}: icmp_seq=1 ttl=64 time=1.87 ms
+64 bytes from ${target}: icmp_seq=2 ttl=64 time=2.01 ms
+64 bytes from ${target}: icmp_seq=3 ttl=64 time=1.95 ms
+
+--- ${target} ping statistics ---
+4 packets transmitted, 4 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 1.87/2.04/2.34/0.18 ms
+`;
+    } else if (trimmed.startsWith('git')) {
+      if (trimmed.startsWith('git status')) {
+        output = `On branch main
+Your branch is up to date with 'origin/main'.
+
+nothing to commit, working tree clean`;
+      } else if (trimmed.startsWith('git log') || trimmed === 'git log') {
+        output = `commit a1b2c3d4e5f6 (HEAD -> main, origin/main)
+Author: Hermes Agent <hermes@warroom.local>
+Date:   ${new Date().toISOString()}
+
+    Tactical recon directive executed: subnet port mapping
+
+commit f6e5d4c3b2a1
+Author: Hermes Agent <hermes@warroom.local>
+Date:   ${new Date(Date.now() - 3600000).toISOString()}
+
+    Agent deployment configuration updated
+`;
+      } else if (trimmed.startsWith('git clone')) {
+        output = `Cloning into 'hermes-warroom'...
+remote: Counting objects: 482, done.
+remote: Compressing objects: 100% (312/312), done.
+remote: Total 482 (delta 198), reused 420 (delta 162)
+Receiving objects: 100% (482/482), 1.2 MiB | 2.4 MiB/s, done.
+Resolving deltas: 100% (198/198), done.
+`;
+      } else {
+        output = `usage: git [--version] [--help] [-C path] [-c name=value]
+           [--exec-path[=path]] [--html-path] [--man-path] [--info-path]
+           [-p | --paginate | -P | --no-pager] [--no-replace-objects] [--bare]
+           [--git-dir=path] [--work-tree=path] [--namespace=path]
+           [--super-prefix=path] [--config-env=name=value]
+           <command> [<args>]`;
+      }
+    } else if (trimmed.startsWith('python') || trimmed.startsWith('python3')) {
+      if (trimmed.includes('import') || trimmed.includes('from ')) {
+        output = `[Hermes Python 3.11.8 Runtime]
+Execution completed without runtime errors.
+Output: {"status": "OPTIMAL", "target": "aarch64", "vector_dim": 768}
+Execution time: ${Math.floor(Math.random() * 200 + 50)}ms
+`;
+      } else if (trimmed.includes('print(')) {
+        output = `Hermes War Room Operational
+Agent Status: ACTIVE
+Token Velocity: 52.4 tok/s
+`;
+      } else {
+        output = `Python 3.11.8 (main, Sep 13 2026, 18:42:15) [aarch64-linux-gnu]
+Type 'copyright', 'credits' or 'license' for more information.
+>>> `;
+      }
+    } else if (trimmed.startsWith('node') || trimmed.startsWith('nodejs')) {
+      output = `Hermes Node.js Runtime v20.11.0 (aarch64-linux-gnu)
+Type "help" for more information.
+> `;
+    } else if (trimmed === 'top' || trimmed.startsWith('top -')) {
+      output = `Tasks: 14 total,   1 running,  13 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  3.4 us,  1.2 sy,  0.0 ni, 95.1 id,  0.3 wa,  0.0 hi,  0.0 si,  0.0 st
+MiB Mem :  8000.0 total,  1245.7 free,  4890.1 used,  2056.2 buff/cache
+MiB Swap: 2048.0 total,  2045.9 free,    51.2 used.  2890.1 avail Mem
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+   4120 u0_a248  20   0  42100 12040  8420 S   2.1   0.1   0:04.12 hermes-daemon
+   4129 u0_a248  20   0  31800  7420  6240 S   0.8   0.1   0:01.23 termux-node-proxy
+   4150 u0_a248  20   0  55400 15120 11240 S   1.4   0.2   0:02.34 python3
+   4201 u0_a248  20   0   8900  1820  1440 R   0.0   0.0   0:00.01 top
+`;
+    } else if (trimmed === 'uname -a' || trimmed === 'uname') {
+      output = `Linux moto-g5-stylus 5.15.137-android14-moto-g5-stylus #1 SMP PREEMPT aarch64 Android
+`;
+    } else if (trimmed === 'cal' || trimmed.startsWith('cal ')) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      output = `     ${now.toLocaleString('default', { month: 'long', year: 'numeric' })}
+Su Mo Tu We Th Fr Sa
+                   1  2  3  4  5  6
+ 7  8  9 10 11 12 13
+14 15 16 17 18 19 20
+21 22 23 24 25 26 27
+28 29 30
+`;
+    } else {
+      // Generic fallback - simulate success
+      output = `[termux@moto-g5-stylus ~]$ ${trimmed}\nCommand executed successfully in Termux subsystem. (Exit code: 0, PID ${Math.floor(Math.random() * 3000 + 4000)})
+`;
+    }
+    }
+  }
   res.json({
     command: trimmed,
     output,
@@ -770,6 +1001,262 @@ let warRoomTasks: any[] = [
 
 app.get("/api/tasks", (_req, res) => {
   res.json(warRoomTasks);
+});
+
+// Reconnaissance scan endpoint
+app.post("/api/recon/scan", async (req, res) => {
+  const { scanType } = req.body;
+  
+  if (!scanType) {
+    return res.status(400).json({ error: "Missing scanType parameter" });
+  }
+
+  const startTime = Date.now();
+
+  // Real network probing: TCP connect checks against the local subnet.
+  // Results are appended to the report and returned as structured hosts so the
+  // topology map renders what was actually discovered.
+  let liveProbeLines: string[] = [];
+  let liveOsInfo: string[] = [];
+  let liveHosts: DiscoveredHost[] = [];
+  const localAddresses = localIPv4Addresses();
+  try {
+    if (scanType === "network" || scanType === "network-map" || scanType === "port") {
+      const targets =
+        scanType === "port"
+          ? [{ host: "192.168.1.1", ports: [22, 80, 443, 3000, 5173, 8080, 8443, 9090] }]
+          : [
+              { host: "192.168.1.1", ports: [22, 80, 443] },
+              { host: "192.168.1.100", ports: [22, 443] },
+              { host: "192.168.1.101", ports: [22, 80] },
+              // This device is probed on its own interface addresses so the map can
+              // tag it locally; off-device runs simply report it unreachable.
+              ...localAddresses.map((address) => ({ host: address, ports: [22, 80, 443, 3000, 5173] })),
+            ];
+      const probes = await Promise.all(
+        targets.map(async (t) => ({ host: t.host, openPorts: await probeHostReachability(t.host, t.ports) }))
+      );
+      liveHosts = probes.map((t) => ({
+        host: t.host,
+        openPorts: t.openPorts,
+        online: t.openPorts.length > 0,
+      }));
+      liveProbeLines = probes.map((t) =>
+        t.openPorts.length > 0
+          ? `  ${t.host}: ${t.openPorts.map((p) => `${p}/tcp`).join(", ")} OPEN (live probe)`
+          : `  ${t.host}: no response (live probe)`
+      );
+    }
+    if (scanType === "process" || scanType === "network") {
+      liveOsInfo = [
+        `  Hostname: ${os.hostname()}`,
+        `  Platform: ${os.platform()} (${os.arch()})`,
+        `  Uptime: ${Math.floor(os.uptime())}s`,
+        `  CPUs: ${os.cpus().length || 1} logical cores`,
+        `  Memory: ${Math.round(os.totalmem() / 1048576)} MB total / ${Math.round(os.freemem() / 1048576)} MB free`,
+      ];
+    }
+  } catch {
+    liveProbeLines = ["  Live probing unavailable on this host"];
+  }
+  
+  // Simulated scan results based on type
+  let results = '';
+  
+  if (scanType === 'network') {
+    results = `=== NETWORK RECONNAISSANCE ===
+Target: 192.168.1.0/24 (wlan0)
+Scan initiated: ${new Date().toISOString()}
+
+--- Interface Configuration ---
+Interface: wlan0
+  Type: Wireless (802.11ac)
+  MAC: 68:d7:9a:31:ec:04
+  IP: 192.168.1.139/24
+  Gateway: 192.168.1.1
+  DNS: 8.8.8.8, 8.8.4.4
+  MTU: 1500
+
+--- WiFi Link Quality ---
+  SSID: WAR_ROOM_SECURE_5G
+  BSSID: 68:d7:9a:31:ec:04
+  Frequency: 5745 MHz (Channel 149)
+  Signal: -48 dBm (Excellent)
+  Tx Rate: 866 Mbps
+  Rx Rate: 866 Mbps
+  Encryption: WPA3-SAE (AES-256-GCM)
+
+--- Network Discovery ---
+  TTL: 64
+  Hop limit: 255
+  Active interfaces: wlan0, lo
+  Proxy: NONE (Direct connection)
+
+--- Security Assessment ---
+  Firewall: iptables active (8 rules)
+  SELinux: Enforcing (Termux context)
+  Port 22: SSH (OpenSSH 9.4)
+  Port 80: HTTP (Node.js)
+  Port 443: HTTPS (Termux TLS)
+
+Status: NETWORK NOMINAL // All interfaces operational
+Scan duration: ${Date.now() - startTime}ms`;
+  } else if (scanType === 'port') {
+    results = `=== PORT SCAN RESULTS ===
+Target: 192.168.1.1 (Gateway)
+Scan type: TCP SYN (-sS)
+Ports: 22, 80, 443, 3000, 5173, 8080, 8443, 9090
+
+PORT      STATE  SERVICE     VERSION
+22/tcp    open   ssh         OpenSSH 9.4 (Android Termux)
+80/tcp    open   http        Node.js Express server
+443/tcp   open   https       Termux TLS Proxy
+3000/tcp  open   hermes-c2   Hermes War Room C2
+5173/tcp  open   vite-dev    Vite Development Server
+8080/tcp  open   http-alt    Node.js Secondary
+8443/tcp  closed https-alt   (filtered)
+9090/tcp  closed prometheus  (filtered)
+
+--- Additional Hosts ---
+192.168.1.1   Gateway    (Router)
+192.168.1.100 Hermes-Cloud (Remote Node)
+192.168.1.101 Backup-Server
+
+--- Traceroute ---
+  1  192.168.1.1 (0.4ms)  [Gateway]
+  2  10.0.0.1 (8.2ms)     [ISP]
+  3  * * *
+
+Status: SCAN COMPLETE // 6 ports open, 2 closed, 2 filtered
+Scan duration: ${Date.now() - startTime}ms`;
+  } else if (scanType === 'process') {
+    results = `=== PROCESS ENUMERATION ===
+Host: moto-g5-stylus (aarch64)
+User: u0_a248 (Termux)
+Time: ${new Date().toISOString()}
+
+PID   USER     CPU%  MEM%   VSZ     RSS    TIME    STAT  COMMAND
+4120  u0_a248  2.1   1.4   42100   12040  0:04    S+    hermes-daemon
+4129  u0_a248  0.8   0.9   31800   7420   0:01    S     termux-node-proxy
+4150  u0_a248  1.4   1.8   55400   15120  0:02    S+    python3 -m recon
+4201  u0_a248  0.0   0.2   8900    1820   0:00    R+    ps aux
+4210  u0_a248  0.3   0.5   12000   4500   0:00    S     termux-service
+4220  u0_a248  0.1   0.3   10000   3200   0:00    S     termux-notification
+
+--- System Load ---
+  CPU Cores: 8 (Snapdragon Octa-Core)
+  Load Average: 0.34, 0.28, 0.22
+  Uptime: 4230 seconds (70.5 minutes)
+  CPU Frequency: 2.2 GHz (max)
+
+--- Memory Summary ---
+  Total: 8192 MB
+  Used: 4890 MB (59.7%)
+  Free: 1245 MB
+  Available: 2890 MB
+  Swap: 51 MB used / 2045 MB total
+
+Status: PROCESSES NOMINAL // System healthy
+Scan duration: ${Date.now() - startTime}ms`;
+  } else if (scanType === 'network-map') {
+    results = `=== SUBNET TOPOLOGY MAP ===
+Network: 192.168.1.0/24
+Subnet Mask: 255.255.255.0
+Gateway: 192.168.1.1
+
+--- Host Discovery ---
+IP Address      Hostname            Status    MAC Address        Vendor
+192.168.1.1    GW-WARROOM          up        11:22:33:44:55:66  TP-Link
+192.168.1.139  MOTO-G5-STYLUS      up        68:D7:9A:31:EC:04  Motorola
+192.168.1.100  HERMES-CLOUD        up        AA:BB:CC:DD:EE:FF  Cloud Provider
+192.168.1.101  BACKUP-SERVER       up        11:11:11:11:11:11  Dell
+192.168.1.200  GUEST-DEVICE        down      N/A                N/A
+
+--- Network Diagram ---
+                    [INTERNET]
+                        |
+                    [ISP DNS]
+                        |
+    +-----------------[192.168.1.1]-----------------+
+    |           TP-LINK GATEWAY (WPA3)             |
+    +-- wlan0 (5GHz) --+-- wlan0 (2.4GHz) -------+
+        |                              |
+    [192.168.1.139]            [192.168.1.100]
+    MOTO G5 STYLUS            HERMES CLOUD NODE
+    (Hermes C2 War Room)     (Remote Compute)
+
+--- Link Quality ---
+  wlan0 -> Gateway: 866 Mbps (Excellent)
+  wlan0 -> Internet: 42 ms latency
+  wlan0 -> Cloud: 68 ms latency
+
+--- Active Services ---
+  SSH (22/tcp)    -> 192.168.1.1:22 (Gateway Management)
+  HTTPS (443/tcp) -> 0.0.0.0:443 (Encrypted Tunnel)
+  Hermes C2 (3000/tcp) -> 127.0.0.1:3000 (Local Only)
+
+Status: TOPOLOGY MAPPED // 4 hosts, 1 down
+Scan duration: ${Date.now() - startTime}ms`;
+  } else {
+    results = `Unknown scan type: ${scanType}\nAvailable types: network, port, process, network-map`;
+  }
+
+  // Append live probe / OS sections to the report
+  if (liveProbeLines.length > 0) {
+    results += `\n\n--- LIVE PROBE (real TCP connect checks) ---\n${liveProbeLines.join("\n")}`;
+  }
+  if (liveOsInfo.length > 0) {
+    results += `\n\n--- LIVE HOST OS INFO ---\n${liveOsInfo.join("\n")}`;
+  }
+
+  res.json({
+    scanType,
+    results,
+    hosts: liveHosts,
+    localAddresses,
+    timestamp: new Date().toISOString(),
+    executionTimeMs: Date.now() - startTime,
+    status: 'complete'
+  });
+});
+
+// Re-probe a small set of hosts (the operator's watch list) without running a
+// full reconnaissance sweep.
+app.post("/api/recon/probe", async (req, res) => {
+  const { hosts, ports } = req.body ?? {};
+
+  if (!Array.isArray(hosts) || hosts.length === 0) {
+    return res.status(400).json({ error: "hosts must be a non-empty array" });
+  }
+  if (hosts.length > WATCH_PROBE_MAX_HOSTS) {
+    return res.status(400).json({ error: `At most ${WATCH_PROBE_MAX_HOSTS} hosts may be probed at once` });
+  }
+
+  const invalid = hosts.filter((host: unknown) => !isIPv4(host));
+  if (invalid.length > 0) {
+    return res.status(400).json({ error: `Invalid host address: ${String(invalid[0])}` });
+  }
+
+  const requestedPorts = Array.isArray(ports)
+    ? [...new Set(ports.filter((port: unknown) => Number.isInteger(port) && (port as number) > 0 && (port as number) <= 65535))]
+    : [];
+  const probePorts = requestedPorts.length > 0 ? (requestedPorts as number[]) : WATCH_PROBE_PORTS;
+
+  const startTime = Date.now();
+  const uniqueHosts = [...new Set(hosts as string[])];
+  const results: DiscoveredHost[] = await Promise.all(
+    uniqueHosts.map(async (host) => {
+      const openPorts = await probeHostReachability(host, probePorts);
+      return { host, openPorts, online: openPorts.length > 0 };
+    })
+  );
+
+  res.json({
+    probedAt: new Date().toISOString(),
+    ports: probePorts,
+    executionTimeMs: Date.now() - startTime,
+    hosts: results,
+  });
 });
 
 app.post("/api/tasks", (req, res) => {
