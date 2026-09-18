@@ -29,16 +29,17 @@ export const NavigationDock: React.FC<NavigationDockProps> = ({
   unreadLogsCount = 0,
   pendingCorrectionsCount = 0,
 }) => {
-  const tabs: { id: WarRoomTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number; badgeColor?: string }[] = [
+  const tabs: { id: WarRoomTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number; badgeColor?: string; badgeLabel?: string }[] = [
     { id: 'command', label: 'C2 WAR ROOM', icon: MessageSquareCode },
-    { id: 'telemetry', label: 'DASHBOARD', icon: Activity, badge: unreadLogsCount > 0 ? unreadLogsCount : undefined },
+    { id: 'telemetry', label: 'DASHBOARD', icon: Activity, badge: unreadLogsCount > 0 ? unreadLogsCount : undefined, badgeLabel: 'unread' },
     { id: 'tasks', label: 'TASKS', icon: CheckSquare },
     { 
       id: 'corrections', 
       label: 'CORRECTIONS', 
       icon: Wrench, 
       badge: pendingCorrectionsCount > 0 ? pendingCorrectionsCount : undefined,
-      badgeColor: 'bg-amber-400 text-black'
+      badgeColor: 'bg-amber-400 text-black',
+      badgeLabel: 'pending'
     },
     { id: 'agents', label: 'DEPLOYMENT', icon: Users },
     { id: 'comms', label: 'COMMS MESH', icon: Radio },
@@ -50,7 +51,10 @@ export const NavigationDock: React.FC<NavigationDockProps> = ({
   ];
 
   return (
-    <nav className="w-full bg-[#080b11]/95 backdrop-blur border-t border-cyan-950/80 py-1 px-2 z-40 shrink-0 select-none">
+    <nav
+      aria-label="War room sections"
+      className="w-full bg-[#080b11]/95 backdrop-blur border-t border-cyan-950/80 py-1 px-2 z-40 shrink-0 select-none"
+    >
       <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 max-w-full">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -59,6 +63,12 @@ export const NavigationDock: React.FC<NavigationDockProps> = ({
             <button
               key={tab.id}
               id={`nav-tab-${tab.id}`}
+              // The badge is a sibling span, so its count would otherwise run
+              // into the label and be announced as part of it ("1CORRECTIONS").
+              aria-label={
+                tab.badge ? `${tab.label}, ${tab.badge} ${tab.badgeLabel ?? 'notification'}` : undefined
+              }
+              aria-current={isActive ? 'page' : undefined}
               onClick={() => {
                 sound.click();
                 onSelectTab(tab.id);

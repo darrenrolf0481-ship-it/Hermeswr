@@ -158,7 +158,10 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
             }}
             className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1 sm:px-2.5 sm:py-1 rounded-lg border transition-all duration-300 ${theme.bg} ${theme.border} ${theme.glow}`}
             title={`Hermes Heartbeat: ${bpm} BPM (${theme.label}) - Click for cardiac diagnostics`}
-            aria-label="Hermes Heartbeat Monitor"
+            aria-label={`Hermes heartbeat monitor, ${bpm} BPM, ${theme.label}`}
+            aria-expanded={showHeartbeatDiagnostics}
+            // Only references the panel while it exists.
+            aria-controls={showHeartbeatDiagnostics ? 'heartbeat-diagnostics' : undefined}
           >
             {/* Heartbeat Icon & Pulsating Cardiac Rings */}
             <div className="relative flex items-center justify-center w-5 h-5 shrink-0">
@@ -239,7 +242,10 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
 
           {/* Heartbeat Cardiac Diagnostics Popover */}
           {showHeartbeatDiagnostics && (
-            <div className="absolute top-full right-0 mt-2 w-64 bg-[#0a0e17] border border-cyan-800/80 rounded-xl p-3 shadow-2xl z-50 text-slate-200 font-mono space-y-2.5">
+            <div
+              id="heartbeat-diagnostics"
+              className="absolute top-full right-0 mt-2 w-64 bg-[#0a0e17] border border-cyan-800/80 rounded-xl p-3 shadow-2xl z-50 text-slate-200 font-mono space-y-2.5"
+            >
               <div className="flex items-center justify-between border-b border-cyan-950 pb-2">
                 <div className="flex items-center gap-1.5 text-xs text-cyan-300 font-bold">
                   <HeartPulse className="w-4 h-4 text-cyan-400 animate-pulse" />
@@ -323,7 +329,8 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
               : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
           }`}
           title={soundEnabled ? 'Mute War Room Audio' : 'Enable Tactical Audio'}
-          aria-label="Toggle Sound"
+          aria-label="War room audio"
+          aria-pressed={soundEnabled}
         >
           {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
         </button>
@@ -337,6 +344,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
           }}
           className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-800/70 text-red-400 hover:text-red-200 transition-colors text-[11px] font-mono font-semibold active:scale-95"
           title="Emergency Abort / Halt Agents"
+          aria-label="Abort all agents"
         >
           <ShieldAlert className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">ABORT</span>
