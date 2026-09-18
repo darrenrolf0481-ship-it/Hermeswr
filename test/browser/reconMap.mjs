@@ -524,6 +524,120 @@ async function main() {
       console.log('  info  no collapsed transition row to exercise');
     }
 
+    console.log('\n== dialogs: names and labels behind the modals ==');
+    // The deploy, hot-swap and create-task forms exist only while their modal is
+    // open, so a static render can never reach them. (The voice-directives guide
+    // is not covered here: its opener appears only during an active Web Speech
+    // session, which headless chromium cannot start.)
+
+    /** Unnamed buttons, unlabeled controls and mouse-only clickables on screen. */
+    const auditInteractive = () =>
+      page.evaluate(() => {
+        const visible = (element) => {
+          const box = element.getBoundingClientRect();
+          return box.width > 0 && box.height > 0;
+        };
+        const name = (element) =>
+          element.getAttribute('aria-label') ||
+          element.getAttribute('aria-labelledby') ||
+          element.getAttribute('title') ||
+          (element.textContent || '').replace(/\s+/g, ' ').trim();
+        const describe = (element) =>
+          `${element.tagName.toLowerCase()}${element.id ? '#' + element.id : ''} [${name(element).slice(0, 32)}]`;
+        const all = [...document.querySelectorAll('*')].filter(visible);
+
+        const semantic = 'button, a[href], input, select, textarea, label, [role="button"], [tabindex="0"]';
+        const mouseOnly = (element) =>
+          getComputedStyle(element).cursor === 'pointer' &&
+          !element.closest(semantic) &&
+          !element.hasAttribute('disabled');
+
+        return {
+          unnamed: all.filter((element) => element.tagName === 'BUTTON' && !name(element)).map(describe),
+          unlabeled: all
+            .filter((element) => ['INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName))
+            .filter(
+              (element) =>
+                !element.getAttribute('aria-label') &&
+                !element.getAttribute('aria-labelledby') &&
+                !element.getAttribute('title') &&
+                !element.closest('label') &&
+                !(element.id && document.querySelector(`label[for="${CSS.escape(element.id)}"]`))
+            )
+            .map((element) => `${element.tagName.toLowerCase()}${element.type ? '[' + element.type + ']' : ''}`),
+          mouseOnly: all
+            .filter(mouseOnly)
+            .filter((element) => !(element.parentElement && mouseOnly(element.parentElement)))
+            .map(describe),
+        };
+      });
+
+    await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 90_000 });
+    await page.waitForSelector('#nav-tab-recon', { timeout: 60_000 });
+
+    // Guard the guard: a sweep that reports nothing because it is broken looks
+    // exactly like a clean page, so prove it flags a known-bad element.
+    const cleanBaseline = await auditInteractive();
+    await page.evaluate(() => {
+      const probe = document.createElement('div');
+      probe.id = 'a11y-detector-probe';
+      probe.style.cssText = 'cursor:pointer;width:40px;height:20px;position:fixed;top:0;left:0';
+      probe.onclick = () => {};
+      document.body.appendChild(probe);
+    });
+    const probed = await auditInteractive();
+    check(
+      'the interactive sweep detects a known mouse-only control',
+      probed.mouseOnly.length === cleanBaseline.mouseOnly.length + 1,
+      `${cleanBaseline.mouseOnly.length} -> ${probed.mouseOnly.length} flagged`
+    );
+
+    const modals = [
+      ['agents', 'button:has-text("DEPLOY NEW AGENT")', 'deploy agent dialog', ['Agent Name', '#deploy-agent-name']],
+      ['tasks', 'button:has-text("CREATE AUTONOMOUS TASK")', 'create task dialog', ['Task Directive Title', '#task-title']],
+      ['agents', 'button:has-text("CONFIG MODEL")', 'model hot-swap dialog', null],
+    ];
+
+    for (const [tab, opener, label, field] of modals) {
+      await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 90_000 });
+      await page.waitForSelector('#nav-tab-recon', { timeout: 60_000 });
+      await page.click(`#nav-tab-${tab}`);
+      await page.waitForTimeout(900);
+
+      const trigger = page.locator(opener).first();
+      if ((await trigger.count()) === 0) {
+        check(`${label} can be opened`, false, `opener ${opener} not found`);
+        continue;
+      }
+      await trigger.click();
+      await page.waitForTimeout(800);
+
+      // The close button exists only inside the modal, so finding it proves the
+      // dialog actually opened and the checks below are not inspecting a
+      // closed page.
+      const closeButton = page.locator('button[aria-label^="Close "]');
+      check(
+        `${label} opens with a named close button`,
+        (await closeButton.count()) > 0,
+        `${await closeButton.count()} named close button(s)`
+      );
+
+      const audit = await auditInteractive();
+      check(`${label}: no unnamed buttons`, audit.unnamed.length === 0, audit.unnamed.join(' | '));
+      check(`${label}: every field has a label`, audit.unlabeled.length === 0, audit.unlabeled.join(' | '));
+      check(`${label}: no mouse-only controls`, audit.mouseOnly.length === 0, audit.mouseOnly.join(' | '));
+
+      if (field) {
+        const [labelText, selector] = field;
+        check(
+          `${label}: fields resolve by their visible label`,
+          (await page.getByLabel(labelText, { exact: false }).count()) === 1 &&
+            (await page.locator(selector).count()) === 1,
+          `getByLabel("${labelText}")`
+        );
+      }
+    }
+
     console.log('\n== console health ==');
     check('no uncaught page errors', pageErrors.length === 0, pageErrors.slice(0, 2).join(' | '));
 
