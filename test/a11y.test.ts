@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { activationKeyDown, isActivationKey } from '../src/utils/a11y';
+import { activationKeyDown, nextFocusIndex, isActivationKey } from '../src/utils/a11y';
 
 /** A structural stand-in for the parts of a KeyboardEvent the helper reads. */
 function keyEvent(key: string) {
@@ -88,4 +88,51 @@ test('activationKeyDown activates only once per event', () => {
   handler(keyEvent('Spacebar'));
 
   assert.equal(calls, 2, 'one activation per event, not per key press batch');
+});
+
+// The dialog Tab loop. This is the rule that decides whether a modal keeps the
+// keyboard inside it, so it is checked as arithmetic rather than observed
+// indirectly through a browser.
+
+test('nextFocusIndex steps forward and backward without wrapping early', () => {
+  assert.equal(nextFocusIndex(3, 0, false), 1);
+  assert.equal(nextFocusIndex(3, 1, false), 2);
+  assert.equal(nextFocusIndex(3, 1, true), 0);
+  assert.equal(nextFocusIndex(3, 2, true), 1);
+});
+
+test('nextFocusIndex wraps at both ends so the dialog is a closed loop', () => {
+  assert.equal(nextFocusIndex(3, 2, false), 0, 'Tab on the last control returns to the first');
+  assert.equal(nextFocusIndex(3, 0, true), 2, 'Shift+Tab on the first control goes to the last');
+});
+
+test('nextFocusIndex enters at the front for Tab and the back for Shift+Tab', () => {
+  const outside = -1;
+  assert.equal(nextFocusIndex(3, outside, false), 0);
+  assert.equal(nextFocusIndex(3, outside, true), 2);
+});
+
+test('nextFocusIndex handles a dialog with a single control', () => {
+  assert.equal(nextFocusIndex(1, 0, false), 0, 'Tab stays on it');
+  assert.equal(nextFocusIndex(1, 0, true), 0, 'Shift+Tab stays on it');
+});
+
+test('nextFocusIndex reports nothing to focus instead of guessing', () => {
+  assert.equal(nextFocusIndex(0, -1, false), null);
+  assert.equal(nextFocusIndex(0, 0, true), null);
+});
+
+test('nextFocusIndex always returns a usable index for any real dialog', () => {
+  for (let count = 1; count <= 12; count += 1) {
+    for (let current = -1; current < count; current += 1) {
+      for (const shift of [false, true]) {
+        const index = nextFocusIndex(count, current, shift);
+        assert.equal(typeof index, 'number', `count=${count} current=${current} shift=${shift}`);
+        assert.ok(
+          index !== null && index >= 0 && index < count,
+          `index ${index} must land inside ${count} controls (current=${current} shift=${shift})`
+        );
+      }
+    }
+  }
 });

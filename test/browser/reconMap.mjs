@@ -692,6 +692,111 @@ async function main() {
       }
     }
 
+    console.log('\n== dialog focus ==');
+    // The dialogs render as siblings of the shell, so the nav dock and header
+    // stay in the tab order while they are open. Whether focus actually stays
+    // inside, and comes back afterwards, is only observable in a real browser.
+
+    const focusDialogs = [
+      ['agents', 'button:has-text("DEPLOY NEW AGENT")', 'deploy agent dialog'],
+      ['tasks', 'button:has-text("CREATE AUTONOMOUS TASK")', 'create task dialog'],
+      ['agents', 'button:has-text("CONFIG MODEL")', 'model hot-swap dialog'],
+    ];
+
+    for (const [tab, opener, label] of focusDialogs) {
+      await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 90_000 });
+      await page.waitForSelector('#nav-tab-recon', { timeout: 60_000 });
+      await page.click(`#nav-tab-${tab}`);
+      await page.waitForTimeout(900);
+
+      const trigger = page.locator(opener).first();
+      if ((await trigger.count()) === 0) {
+        check(`${label}: focus can be tested`, false, `opener ${opener} not found`);
+        continue;
+      }
+
+      // Tagged before opening so the element that gets focus back can be
+      // identified exactly, rather than by matching its text.
+      await trigger.evaluate((element) => element.setAttribute('data-focus-opener', 'yes'));
+      await trigger.click();
+      await page.waitForTimeout(700);
+
+      const dialog = page.locator('[role="dialog"][aria-modal="true"]');
+      const dialogs = await dialog.count();
+      check(`${label}: opens as a modal dialog`, dialogs === 1, `${dialogs} modal dialog(s)`);
+      if (dialogs !== 1) continue;
+
+      const semantics = await page.evaluate(() => {
+        const node = document.querySelector('[role="dialog"][aria-modal="true"]');
+        const labelledby = node?.getAttribute('aria-labelledby');
+        const named = labelledby ? document.getElementById(labelledby) : null;
+        const heading = node?.querySelector('h3');
+        const text = (element) => (element?.textContent ?? '').replace(/\s+/g, ' ').trim();
+        return {
+          focusable: node?.getAttribute('tabindex') ?? null,
+          name: text(named),
+          heading: text(heading),
+          focusedSelf: node === document.activeElement,
+        };
+      });
+
+      check(
+        `${label}: named by its visible heading`,
+        semantics.name !== '' && semantics.name === semantics.heading,
+        `aria-labelledby gives "${semantics.name}", heading reads "${semantics.heading}"`
+      );
+      check(`${label}: is focusable as a container`, semantics.focusable === '-1', `tabindex=${semantics.focusable}`);
+      check(
+        `${label}: focus moves into the dialog on open`,
+        semantics.focusedSelf,
+        'the dialog itself holds focus, so it is announced rather than silent'
+      );
+
+      const controls = await page
+        .locator(
+          '[role="dialog"] button:not([disabled]), [role="dialog"] input:not([disabled]), [role="dialog"] select:not([disabled]), [role="dialog"] textarea:not([disabled]), [role="dialog"] a[href]'
+        )
+        .count();
+
+      // More presses than controls: without a trap, focus reaches the nav dock.
+      const escapes = [];
+      for (let press = 0; press < controls + 4; press += 1) {
+        await page.keyboard.press('Tab');
+        const inside = await page.evaluate(() => {
+          const node = document.querySelector('[role="dialog"][aria-modal="true"]');
+          return Boolean(node?.contains(document.activeElement));
+        });
+        if (!inside) escapes.push(press + 1);
+      }
+      check(
+        `${label}: Tab never leaves the dialog`,
+        escapes.length === 0,
+        `${escapes.length} escape(s) out of ${controls + 4} presses on ${controls} controls`
+      );
+
+      for (let press = 0; press < controls + 4; press += 1) {
+        await page.keyboard.press('Shift+Tab');
+      }
+      const afterShiftTab = await page.evaluate(() => {
+        const node = document.querySelector('[role="dialog"][aria-modal="true"]');
+        return Boolean(node?.contains(document.activeElement));
+      });
+      check(`${label}: Shift+Tab never leaves the dialog`, afterShiftTab, `after ${controls + 4} backwards presses`);
+
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(500);
+      const stillOpen = await page.locator('[role="dialog"]').count();
+      check(`${label}: Escape closes it`, stillOpen === 0, `${stillOpen} dialog(s) open after Escape`);
+
+      const restored = await page.evaluate(() => {
+        const active = document.activeElement;
+        if (!active || active === document.body) return 'nothing (focus fell to the body)';
+        const text = (active.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+        return `${active.tagName.toLowerCase()}:${text}${active.getAttribute('data-focus-opener') === 'yes' ? ' (the opener)' : ''}`;
+      });
+      check(`${label}: focus returns to the button that opened it`, restored.endsWith('(the opener)'), `focus is on ${restored}`);
+    }
+
     console.log('\n== phone viewport ==');
     // The app is mobile-oriented, and a control that is comfortable at 1280px
     // can be a 16px dot on a phone. Swept at 390x844 with touch emulation.
