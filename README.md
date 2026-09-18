@@ -128,8 +128,8 @@ Two layers, no third-party test framework — `node:test` with the existing `tsx
 loader, plus `react-dom/server` for render assertions.
 
 ```bash
-npm test              # 103 unit + integration tests, ~10s
-npm run test:browser  # 43 assertions in real chromium, ~60s
+npm test              # 113 unit + integration tests, ~10s
+npm run test:browser  # 65 assertions in real chromium, ~90s
 ```
 
 | File | Covers |
@@ -140,7 +140,8 @@ npm run test:browser  # 43 assertions in real chromium, ~60s
 | `test/reconExport.test.ts` | Export payload shape and the text report's sections. |
 | `test/ReconView.test.tsx` | Render contract: busy state, real scan output, watch markers, baseline fallback. |
 | `test/reconEndpoint.test.ts` | Boots the real server and asserts the HTTP contract of the recon endpoints. |
-| `test/views.test.tsx` | Render coverage for every tab component: props in, expected visible contract out. |
+| `test/views.test.tsx` | Render coverage for every tab component: props in, expected visible contract out, plus the accessible-name and focusability invariants. |
+| `test/a11y.test.ts` | Keyboard activation rules shared by controls that cannot be a native button. |
 | `test/browser/reconMap.mjs` | Real-browser check of the panel, map geometry, a11y and exports. |
 | `test/fixtures.ts` | Shared typed fixtures for the view tests (not a suite itself). |
 
