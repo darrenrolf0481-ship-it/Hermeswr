@@ -80,10 +80,11 @@ Treat this as part of the contract:
   `activationKeyDown` from `src/utils/a11y.ts` so Enter and Space both work.
 - Decorative icons and SVG overlays are `aria-hidden`.
 
-`test/views.test.tsx` enforces the first two points across every tab, and
-`test/browser/reconMap.mjs` proves the keys actually work and opens each modal
-dialog to audit the forms inside — those do not exist in markup until they are
-opened, so a static render can never see them.
+`test/views.test.tsx` enforces the first two points across every tab, the same
+helpers in `test/a11y-helpers.ts` cover the header and nav dock in
+`test/shell.test.tsx`, and `test/browser/reconMap.mjs` proves the keys actually
+work and opens each modal dialog to audit the forms inside — those do not exist
+in markup until they are opened, so a static render can never see them.
 
 Both suites were added after an audit found three selectable-card elements that
 were mouse-only, 23 default-rendered form controls with no accessible name, and
