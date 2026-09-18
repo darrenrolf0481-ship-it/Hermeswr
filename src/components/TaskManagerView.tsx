@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { AgentTask, AgentDeployment, TacticalCorrectionRecommendation } from '../types';
 import { sound } from '../utils/audio';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 interface TaskManagerViewProps {
   tasks: AgentTask[];
@@ -44,6 +45,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   onOpenCorrectionsTab,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const createDialogRef = useDialogFocus<HTMLDivElement>(showCreateModal, () => setShowCreateModal(false));
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [applyingRecId, setApplyingRecId] = useState<string | null>(null);
@@ -537,11 +539,18 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
       {/* Create Task Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3">
-          <div className="w-full max-w-lg bg-[#0d121c] border border-cyan-700 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.25)] p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div
+            ref={createDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-task-dialog-title"
+            tabIndex={-1}
+            className="w-full max-w-lg bg-[#0d121c] border border-cyan-700 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.25)] p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+          >
             <div className="flex items-center justify-between border-b border-cyan-900/60 pb-3">
               <div className="flex items-center gap-2">
                 <CheckSquare className="w-5 h-5 text-cyan-400" />
-                <h3 className="font-mono font-bold text-cyan-300 text-sm sm:text-base">
+                <h3 id="create-task-dialog-title" className="font-mono font-bold text-cyan-300 text-sm sm:text-base">
                   DISPATCH AUTONOMOUS TASK TO FLEET
                 </h3>
               </div>

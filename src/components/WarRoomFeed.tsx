@@ -31,6 +31,7 @@ import {
 import { AgentMessage, AgentState, ToolInvocation, SubAgentInfo } from '../types';
 import { sound } from '../utils/audio';
 import { useTacticalSpeechRecognition } from '../hooks/useTacticalSpeechRecognition';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 interface WarRoomFeedProps {
   messages: AgentMessage[];
@@ -54,6 +55,8 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
   const [expandedScratchpads, setExpandedScratchpads] = useState<Record<string, boolean>>({});
   const [showVoiceGuide, setShowVoiceGuide] = useState(false);
   const [lastVoiceCommand, setLastVoiceCommand] = useState<string | null>(null);
+
+  const voiceGuideRef = useDialogFocus<HTMLDivElement>(showVoiceGuide, () => setShowVoiceGuide(false));
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -603,12 +606,19 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
       {/* Voice Directive Cheat Sheet & Command Guide Modal */}
       {showVoiceGuide && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3">
-          <div className="w-full max-w-lg bg-[#0d121c] border border-cyan-600 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.3)] p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div
+            ref={voiceGuideRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voice-guide-dialog-title"
+            tabIndex={-1}
+            className="w-full max-w-lg bg-[#0d121c] border border-cyan-600 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.3)] p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+          >
             <div className="flex items-center justify-between border-b border-cyan-900/60 pb-3">
               <div className="flex items-center gap-2">
                 <Headphones className="w-5 h-5 text-cyan-400" />
                 <div>
-                  <h3 className="font-mono font-bold text-cyan-300 text-sm sm:text-base">
+                  <h3 id="voice-guide-dialog-title" className="font-mono font-bold text-cyan-300 text-sm sm:text-base">
                     TACTICAL VOICE DIRECTIVES GUIDE
                   </h3>
                   <p className="text-[11px] font-mono text-slate-400">
