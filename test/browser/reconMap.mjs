@@ -29,10 +29,26 @@ const ARTIFACT_DIR = path.join(__dirname, 'artifacts');
 const failures = [];
 let page = null;
 
+// Every page the run opens. A phone-layout regression is invisible in a desktop
+// screenshot, so failures are captured per page rather than on one of them.
+const openPages = [];
+let failureCaptured = false;
+let pendingCapture = null;
+
 function check(label, condition, detail = '') {
   const ok = Boolean(condition);
   console.log(`${ok ? '  PASS' : '  FAIL'}  ${label}${detail ? ` — ${detail}` : ''}`);
-  if (!ok) failures.push(`${label}${detail ? ` (${detail})` : ''}`);
+  if (!ok) {
+    failures.push(`${label}${detail ? ` (${detail})` : ''}`);
+
+    // Captured on the first failure, not at the end. The sweep navigates through
+    // every tab, so a screenshot taken after the run would show whatever screen
+    // happened to be last rather than the one that broke.
+    if (!failureCaptured && page) {
+      failureCaptured = true;
+      pendingCapture = captureFailureArtifacts('failure-1');
+    }
+  }
   return ok;
 }
 
@@ -193,11 +209,27 @@ function checkTopology(label, topology) {
 async function captureFailureArtifacts(name) {
   try {
     fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
-    await page.screenshot({ path: path.join(ARTIFACT_DIR, `${name}.png`), fullPage: false });
-    console.log(`  info  screenshot written to test/browser/artifacts/${name}.png`);
   } catch (error) {
-    console.log(`  info  could not write screenshot: ${error.message}`);
+    console.log(`  info  could not create test/browser/artifacts: ${error.message}`);
+    return;
   }
+
+  // Every screenshot is started in the same tick. Awaiting them one at a time
+  // lets a page be torn down in between — the phone page closes at the end of its
+  // own section, which is exactly where its checks fail.
+  const writes = [];
+  for (const { target, label } of openPages) {
+    if (target.isClosed()) continue;
+    const file = `${name}-${label}.png`;
+    writes.push(
+      target
+        .screenshot({ path: path.join(ARTIFACT_DIR, file), fullPage: false })
+        .then(() => console.log(`  info  screenshot written to test/browser/artifacts/${file}`))
+        .catch((error) => console.log(`  info  could not capture the ${label} page: ${error.message}`))
+    );
+  }
+
+  await Promise.all(writes);
 }
 
 async function main() {
@@ -237,6 +269,7 @@ async function main() {
     check('dev server is up', true, `${BASE_URL} (pid ${server.pid})`);
 
     page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    openPages.push({ target: page, label: 'desktop' });
     page.on('console', (msg) => {
       if (msg.type() !== 'error') return;
       consoleErrors.push({ text: msg.text(), url: msg.location()?.url ?? '' });
@@ -803,6 +836,7 @@ async function main() {
 
     const phoneTabs = ['command', 'telemetry', 'tasks', 'corrections', 'agents', 'comms', 'tuning', 'terminus', 'recon', 'stylus', 'matrix'];
     const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    openPages.push({ target: phone, label: 'phone' });
 
     try {
       await phone.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 90_000 });
@@ -931,6 +965,8 @@ async function main() {
         `track ${slider?.track}px, clip ${slider?.clip}`
       );
     } finally {
+      // Settle a capture triggered by a phone failure before this page goes away.
+      if (pendingCapture) await pendingCapture.catch(() => {});
       await phone.close().catch(() => {});
     }
 
@@ -958,9 +994,12 @@ async function main() {
   } catch (error) {
     failures.push(`harness error: ${error.message}`);
     console.error(`\nharness error: ${error.message}`);
-    if (page) await captureFailureArtifacts('failure');
+    if (page) await captureFailureArtifacts('harness-error');
     if (serverLog) console.error('--- server log ---\n' + serverLog.slice(-2000));
   } finally {
+    // A capture started by a failed check has to finish before the browser goes
+    // away, or the upload step in CI would find an empty directory.
+    if (pendingCapture) await pendingCapture.catch(() => {});
     await browser.close().catch(() => {});
     server.kill('SIGTERM');
   }

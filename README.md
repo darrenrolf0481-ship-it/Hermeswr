@@ -158,7 +158,10 @@ keyboard activation, and accessible names.
 - Chromium is resolved from `PLAYWRIGHT_CHROMIUM_PATH` / `CHROME_PATH`, then
   playwright's default, then the newest cached `~/.cache/ms-playwright/chromium-*`
   build. If none is found: `npx playwright install chromium`.
-- Failure screenshots are written to `test/browser/artifacts/` (gitignored).
+- Failure screenshots are written to `test/browser/artifacts/` (gitignored): one
+  per open page, captured at the *first* failed check — the sweep navigates
+  through every tab, so a picture taken afterwards would show an unrelated screen
+  — and again if the harness itself throws. A clean run writes nothing.
 - Elements the check depends on carry `data-testid` hooks (`recon-panel`,
   `topology-map`, `watch-halo`).
 
