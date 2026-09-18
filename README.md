@@ -129,7 +129,7 @@ loader, plus `react-dom/server` for render assertions.
 
 ```bash
 npm test              # 122 unit + integration tests, ~10s
-npm run test:browser  # 71 assertions in real chromium, ~90s
+npm run test:browser  # 77 assertions in real chromium, ~2min
 ```
 
 | File | Covers |
