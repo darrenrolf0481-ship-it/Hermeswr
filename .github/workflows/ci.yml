@@ -6,6 +6,13 @@
 # To switch to bun instead: run `bun install` to regenerate a bun.lock from
 # package.json, commit it, and replace the npm steps below with
 # `bun install --frozen-lockfile` and `bun run <script>`.
+#
+# Runner: pinned to ubuntu-24.04 instead of ubuntu-latest. GitHub moves the
+# `-latest` alias onto a new LTS on its own schedule (24.04 -> 26.04 lands on
+# 2026-10-19), and the browser job's `playwright install --with-deps` step
+# resolves system libraries at run time — the step that has broken on previous
+# LTS jumps. Pinning makes that a deliberate upgrade instead of a surprise that
+# surfaces on an unrelated push. Remove the version to follow `-latest` again.
 
 name: CI
 
@@ -22,12 +29,14 @@ concurrency:
 jobs:
   checks:
     name: Lint, unit tests and build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Reads .nvmrc so CI and local runs cannot drift onto different majors.
-      - uses: actions/setup-node@v4
+      # `cache: npm` is explicit because setup-node no longer auto-detects every
+      # package manager; the lockfile it hashes is package-lock.json.
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -46,11 +55,11 @@ jobs:
 
   browser:
     name: Browser check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -75,7 +84,7 @@ jobs:
 
       - name: Upload failure screenshots
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-check-artifacts
           path: test/browser/artifacts/
