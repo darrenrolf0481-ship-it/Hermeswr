@@ -58,8 +58,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The harness boots the dev server itself and resolves the browser from
-      # PLAYWRIGHT_CHROMIUM_PATH, so installing chromium is all that is needed.
+      # playwright-core is a library, not a browser: it downloads nothing, and
+      # the harness looks the binary up instead (PLAYWRIGHT_CHROMIUM_PATH, then
+      # playwright-core's own default, then the newest chromium-* build in
+      # ~/.cache/ms-playwright). Installing chromium is therefore all that is
+      # needed, and that last fallback keeps this working if a future
+      # `npx playwright` fetches a revision playwright-core does not expect.
+      #
+      # `playwright` is deliberately not a devDependency — npx fetches the CLI on
+      # demand, which it does without a prompt when stdin is not a terminal.
       - name: Install chromium
         run: npx playwright install --with-deps chromium
 
