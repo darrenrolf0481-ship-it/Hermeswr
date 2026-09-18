@@ -82,7 +82,7 @@ export const NavigationDock: React.FC<NavigationDockProps> = ({
               <div className="relative">
                 <Icon className={`w-4 h-4 transition-transform ${isActive ? 'scale-110 text-cyan-400' : ''}`} />
                 {tab.badge && (
-                  <span className={`absolute -top-1.5 -right-2 px-1 py-0.2 rounded-full ${tab.badgeColor || 'bg-cyan-500 text-black'} text-[8px] font-bold min-w-[12px] text-center shadow-sm`}>
+                  <span className={`absolute -top-1.5 -right-2 px-1 py-0.5 rounded-full ${tab.badgeColor || 'bg-cyan-500 text-black'} text-[8px] font-bold min-w-[12px] text-center shadow-sm`}>
                     {tab.badge > 99 ? '99+' : tab.badge}
                   </span>
                 )}

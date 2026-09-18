@@ -362,7 +362,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                         sound.click();
                         setExpandedTaskId(isExpanded ? null : task.id);
                       }}
-                      className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 pt-1"
+                      className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 py-1"
                     >
                       {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                       <span>{isExpanded ? 'Hide' : 'Inspect'} Cognitive Reasoning Steps ({task.steps.length})</span>
@@ -387,7 +387,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                               )}
                             </div>
                             <span
-                              className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-bold ${
+                              className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${
                                 step.status === 'done'
                                     ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                                   : step.status === 'running'
@@ -496,7 +496,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                           sound.alert();
                           onTaskAction(task.id, 'fail');
                         }}
-                        className="p-1 rounded bg-slate-900 hover:bg-red-950 border border-slate-700 hover:border-red-700 text-slate-400 hover:text-red-400 text-[10px] font-mono transition-colors"
+                        className="p-1.5 rounded bg-slate-900 hover:bg-red-950 border border-slate-700 hover:border-red-700 text-slate-400 hover:text-red-400 text-[10px] font-mono transition-colors"
                         title="Simulate Failure (Test Tactical Correction)"
                       >
                         <Flame className="w-3.5 h-3.5" />
@@ -508,7 +508,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                         sound.click();
                         onTaskAction(task.id, 'retry');
                       }}
-                      className="p-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 text-[10px] font-mono transition-colors"
+                      className="p-1.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 text-[10px] font-mono transition-colors"
                       title="Reset / Retry Task"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
@@ -520,7 +520,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                           sound.alert();
                           onTaskAction(task.id, 'abort');
                         }}
-                        className="p-1 rounded bg-slate-900 hover:bg-red-950 border border-slate-700 hover:border-red-700 text-slate-400 hover:text-red-400 text-[10px] font-mono transition-colors"
+                        className="p-1.5 rounded bg-slate-900 hover:bg-red-950 border border-slate-700 hover:border-red-700 text-slate-400 hover:text-red-400 text-[10px] font-mono transition-colors"
                         title="Abort Task"
                       >
                         <XCircle className="w-3.5 h-3.5" />
@@ -548,7 +548,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
               <button
                 onClick={() => setShowCreateModal(false)}
                 aria-label="Close create task dialog"
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -357,7 +357,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                   sound.click();
                   setFilterStatus(status);
                 }}
-                className={`px-2 py-0.5 rounded text-[11px] font-mono transition-colors whitespace-nowrap ${
+                className={`px-2 py-1 rounded text-[11px] font-mono transition-colors whitespace-nowrap ${
                   filterStatus === status
                     ? 'bg-cyan-500 text-black font-bold'
                     : 'text-slate-400 hover:text-slate-200'
@@ -382,7 +382,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                   sound.click();
                   setFilterProvider(p.id as any);
                 }}
-                className={`px-2 py-0.5 rounded text-[11px] font-mono transition-colors whitespace-nowrap ${
+                className={`px-2 py-1 rounded text-[11px] font-mono transition-colors whitespace-nowrap ${
                   filterProvider === p.id
                     ? 'bg-purple-600 text-white font-bold'
                     : 'text-slate-400 hover:text-slate-200'
@@ -423,7 +423,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                       <span className="text-sm font-mono font-bold text-cyan-200">
                         {agent.name}
                       </span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-900 text-slate-400 border border-slate-800">
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
                         {agent.priority}
                       </span>
                     </div>
@@ -470,7 +470,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                   {onUpdateAgentModel && (
                     <button
                       onClick={() => handleOpenModelSwitcher(agent)}
-                      className="px-2 py-0.5 rounded bg-slate-800/90 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-700 text-cyan-300 text-[10px] font-mono flex items-center gap-1 transition-colors"
+                      className="px-2 py-1 rounded bg-slate-800/90 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-700 text-cyan-300 text-[10px] font-mono flex items-center gap-1 transition-colors"
                       title="Hot-swap model provider or variant for this agent"
                     >
                       <SlidersHorizontal className="w-2.5 h-2.5 text-cyan-400" />
@@ -534,7 +534,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                               <AlertTriangle className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
                               TACTICAL CORRECTION READY
                             </span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-red-950 text-red-300 border border-red-800 font-bold">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-950 text-red-300 border border-red-800 font-bold">
                               {rec.successRatePct}% Success
                             </span>
                           </div>
@@ -545,7 +545,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                             {onOpenCorrectionsTab && (
                               <button
                                 onClick={onOpenCorrectionsTab}
-                                className="flex-1 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono transition-colors"
+                                className="flex-1 py-1.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-mono transition-colors"
                               >
                                 Inspect
                               </button>
@@ -560,7 +560,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                                   sound.toolSuccess();
                                 }}
                                 disabled={applyingRecId === rec.id}
-                                className="flex-1 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-[10px] font-mono font-bold flex items-center justify-center gap-1"
+                                className="flex-1 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-[10px] font-mono font-bold flex items-center justify-center gap-1"
                               >
                                 <Zap className="w-3 h-3 fill-current" />
                                 {applyingRecId === rec.id ? 'Applying...' : '⚡ Reconfigure'}
@@ -582,7 +582,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                       sound.click();
                       onAgentAction(agent.id, 'pause');
                     }}
-                    className="flex-1 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-amber-300 text-[10px] font-mono flex items-center justify-center gap-1 transition-colors"
+                    className="flex-1 py-1.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-amber-300 text-[10px] font-mono flex items-center justify-center gap-1 transition-colors"
                     title="Pause Agent Process"
                   >
                     <Pause className="w-3 h-3" />
@@ -594,7 +594,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                       sound.click();
                       onAgentAction(agent.id, 'resume');
                     }}
-                    className="flex-1 py-1 rounded bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 text-[10px] font-mono flex items-center justify-center gap-1 transition-colors"
+                    className="flex-1 py-1.5 rounded bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700 text-emerald-300 text-[10px] font-mono flex items-center justify-center gap-1 transition-colors"
                     title="Resume Agent Process"
                   >
                     <Play className="w-3 h-3" />
@@ -607,7 +607,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                     sound.click();
                     onAgentAction(agent.id, 'recalibrate');
                   }}
-                  className="py-1 px-2 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-[10px] font-mono transition-colors"
+                  className="py-1.5 px-2 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-[10px] font-mono transition-colors"
                   title="Recalibrate Agent Subsystems"
                 >
                   <RotateCcw className="w-3 h-3" />
@@ -618,7 +618,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                     sound.alert();
                     onAgentAction(agent.id, 'terminate');
                   }}
-                  className="py-1 px-2 rounded bg-slate-900 hover:bg-red-950 border border-slate-700 hover:border-red-700 text-slate-400 hover:text-red-300 text-[10px] font-mono transition-colors"
+                  className="py-1.5 px-2 rounded bg-slate-900 hover:bg-red-950 border border-slate-700 hover:border-red-700 text-slate-400 hover:text-red-300 text-[10px] font-mono transition-colors"
                   title="Terminate Agent"
                 >
                   <Trash2 className="w-3 h-3" />
@@ -648,7 +648,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
               <button
                 onClick={() => setModelSwitchTargetAgent(null)}
                 aria-label="Close model reconfigure dialog"
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -739,7 +739,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="font-mono text-xs font-bold text-cyan-300">{m.name}</span>
                         {m.contextLength && (
-                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
                             {m.contextLength} ctx
                           </span>
                         )}
@@ -770,7 +770,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
 
             {/* Custom Model Toggle */}
             <div className="flex items-center justify-between text-xs font-mono pt-1 text-slate-400">
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-2 py-1 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={useCustomSwitch}
@@ -823,7 +823,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
               <button
                 onClick={() => setShowDeployModal(false)}
                 aria-label="Close deploy agent dialog"
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -921,7 +921,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setUseCustomModel(true)}
-                      className="text-[10px] text-cyan-400 hover:underline"
+                      className="text-[10px] text-cyan-400 hover:underline py-1.5"
                     >
                       + Custom Model ID
                     </button>
@@ -956,7 +956,7 @@ export const AgentDeploymentView: React.FC<AgentDeploymentViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setUseCustomModel(false)}
-                      className="text-[10px] text-cyan-400 hover:underline"
+                      className="text-[10px] text-cyan-400 hover:underline py-1.5"
                     >
                       Back to Preset List
                     </button>

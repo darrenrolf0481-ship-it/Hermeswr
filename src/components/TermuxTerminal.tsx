@@ -196,7 +196,7 @@ System ready. Tool hooks: termux_shell, python_interpreter, vector_memory, recon
         <div className="flex items-center gap-2">
           <TerminalIcon className="w-4 h-4 text-emerald-400" />
           <span className="text-xs font-bold text-emerald-400">TERMUX // aarch64 MOTO G5</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800">
             ACTIVE TTY
           </span>
         </div>
@@ -204,7 +204,7 @@ System ready. Tool hooks: termux_shell, python_interpreter, vector_memory, recon
         <div className="flex items-center gap-2">
           <button
             onClick={copyTerminalText}
-            className="p-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs flex items-center gap-1 transition-colors"
+            className="p-1.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs flex items-center gap-1 transition-colors"
             title="Copy Terminal Logs"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -214,7 +214,7 @@ System ready. Tool hooks: termux_shell, python_interpreter, vector_memory, recon
               sound.click();
               setEntries([]);
             }}
-            className="p-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-red-400 text-xs transition-colors"
+            className="p-1.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-red-400 text-xs transition-colors"
             title="Clear Terminal Screen"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -258,7 +258,7 @@ System ready. Tool hooks: termux_shell, python_interpreter, vector_memory, recon
               sound.click();
               executeCommand(macro.cmd);
             }}
-            className="px-2 py-0.5 rounded bg-slate-900 hover:bg-cyan-950 border border-slate-800 hover:border-cyan-800 text-[10px] text-cyan-300 hover:text-cyan-200 transition-colors shrink-0 active:scale-95"
+            className="px-2 py-1 rounded bg-slate-900 hover:bg-cyan-950 border border-slate-800 hover:border-cyan-800 text-[10px] text-cyan-300 hover:text-cyan-200 transition-colors shrink-0 active:scale-95"
           >
             ${macro.label}
           </button>
@@ -277,7 +277,7 @@ System ready. Tool hooks: termux_shell, python_interpreter, vector_memory, recon
           onChange={(e) => setInputVal(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type Termux command (e.g. termux-battery-status, nmap, pkg)..."
-          className="flex-1 bg-transparent text-slate-100 placeholder:text-slate-600 focus:outline-none text-xs font-mono"
+          className="flex-1 min-h-6 bg-transparent text-slate-100 placeholder:text-slate-600 focus:outline-none text-xs font-mono"
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}

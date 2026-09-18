@@ -349,7 +349,7 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
                 <span className="font-bold text-cyan-300 text-[11px] uppercase tracking-wider">
                   VOICE DIRECTIVE TRANSCEIVER
                 </span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
                   speech.isListening 
                     ? 'bg-red-950/90 text-red-300 border border-red-800' 
                     : 'bg-slate-900 text-slate-400 border border-slate-800'
@@ -385,7 +385,7 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
                   sound.click();
                   speech.setHandsFreeMode(!speech.handsFreeMode);
                 }}
-                className={`px-2 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 border transition-colors ${
+                className={`px-2 py-1 rounded text-[10px] font-mono flex items-center gap-1 border transition-colors ${
                   speech.handsFreeMode
                     ? 'bg-amber-950/90 border-amber-500 text-amber-300 font-bold shadow-[0_0_10px_rgba(245,158,11,0.25)]'
                     : 'bg-[#141a27] border-slate-800 text-slate-400 hover:text-slate-200'
@@ -403,7 +403,7 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
                   sound.click();
                   setShowVoiceGuide(true);
                 }}
-                className="p-1 rounded bg-[#141a27] hover:bg-cyan-950 border border-slate-800 text-slate-400 hover:text-cyan-300"
+                className="p-1.5 rounded bg-[#141a27] hover:bg-cyan-950 border border-slate-800 text-slate-400 hover:text-cyan-300"
                 title="Tactical Voice Directives Guide"
               >
                 <HelpCircle className="w-3.5 h-3.5" />
@@ -418,7 +418,7 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
                     speech.resetTranscript();
                     setInputPrompt('');
                   }}
-                  className="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-red-950 border border-slate-800 hover:border-red-800 text-slate-400 hover:text-red-300 text-[10px]"
+                  className="px-1.5 py-1 rounded bg-slate-900 hover:bg-red-950 border border-slate-800 hover:border-red-800 text-slate-400 hover:text-red-300 text-[10px]"
                 >
                   CLEAR
                 </button>
@@ -428,7 +428,7 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
               <button
                 type="button"
                 onClick={speech.toggleListening}
-                className={`px-2 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 border ${
+                className={`px-2 py-1 rounded text-[10px] font-mono flex items-center gap-1 border ${
                   speech.isListening
                     ? 'bg-red-950 hover:bg-red-900 border-red-700 text-red-200'
                     : 'bg-cyan-950 hover:bg-cyan-900 border-cyan-700 text-cyan-200'
@@ -484,7 +484,7 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
               <button
                 type="button"
                 onClick={() => speech.startListening()}
-                className="px-2 py-0.5 rounded bg-red-900 hover:bg-red-800 text-white text-[10px]"
+                className="px-2 py-1 rounded bg-red-900 hover:bg-red-800 text-white text-[10px]"
               >
                 RETRY
               </button>
@@ -619,7 +619,7 @@ export const WarRoomFeed: React.FC<WarRoomFeedProps> = ({
               <button
                 onClick={() => setShowVoiceGuide(false)}
                 aria-label="Close voice directives guide"
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
               >
                 <X className="w-4 h-4" />
               </button>

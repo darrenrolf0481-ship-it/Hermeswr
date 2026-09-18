@@ -401,7 +401,7 @@ export const StylusCanvas: React.FC<StylusCanvasProps> = ({
                 setSelectedColor(c.val);
               }}
               style={{ backgroundColor: c.val }}
-              className={`w-5 h-5 rounded-full border-2 transition-transform ${
+              className={`w-7 h-7 rounded-full border-2 transition-transform ${
                 selectedColor === c.val ? 'border-white scale-110 shadow-[0_0_8px_currentColor]' : 'border-transparent opacity-80'
               }`}
               title={c.label}
@@ -500,7 +500,7 @@ export const StylusCanvas: React.FC<StylusCanvasProps> = ({
                   onSendToWarRoom(canvasRef.current.toDataURL('image/png'), visionAnalysis);
                 }
               }}
-              className="px-2 py-0.5 rounded bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-[10px] flex items-center gap-1"
+              className="px-2 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-[10px] flex items-center gap-1"
             >
               <Share2 className="w-3 h-3" />
               DISPATCH TO WAR ROOM

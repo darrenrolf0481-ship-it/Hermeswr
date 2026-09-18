@@ -319,7 +319,7 @@ export const ReconView: React.FC<ReconViewProps> = ({
                 event.stopPropagation();
                 onToggleWatch(node.host);
               }}
-              className={`absolute -top-1.5 -right-1.5 z-10 p-0.5 rounded-full border transition-colors ${
+              className={`absolute -top-1.5 -right-1.5 z-10 p-1.5 rounded-full border transition-colors ${
                 isWatched
                   ? 'bg-amber-500 border-amber-300 text-black'
                   : 'bg-slate-900/90 border-slate-600 text-slate-400 hover:border-amber-400 hover:text-amber-300'
@@ -895,7 +895,7 @@ u0_a248   4201  0.0  0.2   8900  1820 pts/0    R+   19:01   0:00 ps aux
                       </span>
                       <button
                         onClick={() => onToggleWatch(status.host)}
-                        className="p-1 rounded-lg bg-slate-900 hover:bg-red-950 border border-slate-700 hover:border-red-700 text-slate-400 hover:text-red-300 transition-colors"
+                        className="p-1.5 rounded-lg bg-slate-900 hover:bg-red-950 border border-slate-700 hover:border-red-700 text-slate-400 hover:text-red-300 transition-colors"
                         title={`Remove ${status.host} from watch list`}
                         aria-label={`Remove ${status.host} from watch list`}
                       >

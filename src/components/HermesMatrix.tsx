@@ -142,7 +142,7 @@ export const HermesMatrix: React.FC<HermesMatrixProps> = ({
           step="0.05"
           value={temperature}
           onChange={(e) => onChangeTemperature(parseFloat(e.target.value))}
-          className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+          className="w-full accent-cyan-400 h-6 py-[9px] bg-clip-content bg-slate-800 rounded-lg cursor-pointer"
         />
       </div>
 
@@ -161,7 +161,7 @@ export const HermesMatrix: React.FC<HermesMatrixProps> = ({
                 <span className="text-xs font-mono font-bold text-amber-300">
                   {t.name}()
                 </span>
-                <span className="px-1.5 py-0.2 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800 text-[9px] font-mono">
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800 text-[9px] font-mono">
                   ACTIVE
                 </span>
               </div>
@@ -253,7 +253,7 @@ export const HermesMatrix: React.FC<HermesMatrixProps> = ({
                   sound.click();
                   onDeleteMemory(m.id);
                 }}
-                className="p-1 text-slate-500 hover:text-red-400 transition-colors"
+                className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
                 title="Delete Record"
               >
                 <Trash2 className="w-3.5 h-3.5" />

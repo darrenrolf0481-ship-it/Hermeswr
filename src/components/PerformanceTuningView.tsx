@@ -196,7 +196,7 @@ export const PerformanceTuningView: React.FC<PerformanceTuningViewProps> = ({
             step="0.05"
             value={localConfig.temperature}
             onChange={(e) => handleSliderChange('temperature', parseFloat(e.target.value))}
-            className="w-full accent-amber-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+            className="w-full accent-amber-400 h-6 py-[9px] bg-clip-content bg-slate-800 rounded-lg cursor-pointer"
           />
           <p className="text-[10px] font-sans text-slate-400">
             Controls probability entropy. Lower values ensure precise command syntax; higher values promote speculative reasoning.
@@ -222,7 +222,7 @@ export const PerformanceTuningView: React.FC<PerformanceTuningViewProps> = ({
             step="0.05"
             value={localConfig.topP}
             onChange={(e) => handleSliderChange('topP', parseFloat(e.target.value))}
-            className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+            className="w-full accent-cyan-400 h-6 py-[9px] bg-clip-content bg-slate-800 rounded-lg cursor-pointer"
           />
           <p className="text-[10px] font-sans text-slate-400">
             Limits cumulative token selection to the highest probability mass, pruning unpredictable token hallucinations.
@@ -248,7 +248,7 @@ export const PerformanceTuningView: React.FC<PerformanceTuningViewProps> = ({
             step="1"
             value={localConfig.maxReasoningSteps}
             onChange={(e) => handleSliderChange('maxReasoningSteps', parseInt(e.target.value))}
-            className="w-full accent-purple-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+            className="w-full accent-purple-400 h-6 py-[9px] bg-clip-content bg-slate-800 rounded-lg cursor-pointer"
           />
           <p className="text-[10px] font-sans text-slate-400">
             Governs the recursion ceiling inside the Nous Hermes <code className="text-purple-300">&lt;scratchpad&gt;</code> before tool dispatch.

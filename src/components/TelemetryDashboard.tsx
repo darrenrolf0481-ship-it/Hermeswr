@@ -419,7 +419,7 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                   aria-label="Filter transitions by agent"
                   value={selectedAgentFilter}
                   onChange={(e) => setSelectedAgentFilter(e.target.value)}
-                  className="bg-transparent text-cyan-300 font-bold focus:outline-none cursor-pointer"
+                  className="min-h-6 bg-transparent text-cyan-300 font-bold focus:outline-none cursor-pointer"
                 >
                   <option value="ALL" className="bg-[#0f1420] text-slate-200">ALL AGENTS</option>
                   {agents.map((a) => (
@@ -437,7 +437,7 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                   aria-label="Filter transitions by trigger"
                   value={selectedTriggerFilter}
                   onChange={(e) => setSelectedTriggerFilter(e.target.value)}
-                  className="bg-transparent text-cyan-300 font-bold focus:outline-none cursor-pointer"
+                  className="min-h-6 bg-transparent text-cyan-300 font-bold focus:outline-none cursor-pointer"
                 >
                   <option value="ALL" className="bg-[#0f1420] text-slate-200">ALL TRIGGERS</option>
                   <option value="OPERATOR" className="bg-[#0f1420] text-slate-200">OPERATOR</option>
@@ -894,7 +894,7 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                     placeholder="Search logs..."
                     value={searchLogQuery}
                     onChange={(e) => setSearchLogQuery(e.target.value)}
-                    className="w-full bg-[#080b12] border border-slate-800 focus:border-cyan-500 rounded-lg pl-6 pr-2 py-0.8 text-[10px] font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none"
+                    className="w-full bg-[#080b12] border border-slate-800 focus:border-cyan-500 rounded-lg pl-6 pr-2 py-1.5 text-[10px] font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none"
                   />
                 </div>
 
@@ -914,7 +914,7 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                     sound.click();
                     onClearLogs();
                   }}
-                  className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
+                  className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
                   title="Clear Logs Buffer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -931,7 +931,7 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                     sound.click();
                     setSelectedLogLevel(lvl);
                   }}
-                  className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors whitespace-nowrap ${
+                  className={`px-2 py-1.5 rounded text-[10px] font-mono transition-colors whitespace-nowrap ${
                     selectedLogLevel === lvl
                       ? 'bg-cyan-500 text-black font-bold'
                       : 'bg-slate-800 text-slate-400 hover:text-slate-200'
@@ -955,7 +955,7 @@ export const TelemetryDashboard: React.FC<TelemetryDashboardProps> = ({
                     className="p-2 rounded bg-[#090d16] border border-slate-900 flex items-start gap-2 text-[11px]"
                   >
                     <span className="text-slate-500 shrink-0">{log.timestamp}</span>
-                    <span className={`px-1.5 py-0.2 rounded border text-[9px] font-semibold uppercase shrink-0 ${getLogLevelBadge(log.level)}`}>
+                    <span className={`px-1.5 py-0.5 rounded border text-[9px] font-semibold uppercase shrink-0 ${getLogLevelBadge(log.level)}`}>
                       {log.level}
                     </span>
                     <span className="text-cyan-400/90 font-semibold shrink-0">[{log.source}]</span>
