@@ -2,6 +2,7 @@ node_modules/
 build/
 dist/
 coverage/
+test/browser/artifacts/
 .DS_Store
 *.log
 .env*

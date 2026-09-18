@@ -1,0 +1,45 @@
+# Package manager: npm.
+# package-lock.json is the single source of truth for dependency resolution and
+# must stay committed — `npm ci` fails without it. The repo previously carried a
+# bun.lock as well, but it predated several dependencies (playwright-core,
+# @types/react) and would have resolved stale versions, so it was removed.
+# To switch to bun instead: run `bun install` to regenerate a bun.lock from
+# package.json, commit it, and replace the npm steps below with
+# `bun install --frozen-lockfile` and `bun run <script>`.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, unit tests and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads .nvmrc so CI and local runs cannot drift onto different majors.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
