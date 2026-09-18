@@ -447,6 +447,83 @@ async function main() {
       .catch(() => false);
     check('TERMUX CLI tab renders its terminal', terminalVisible);
 
+    console.log('\n== other tabs: keyboard operability ==');
+    // The channel cards and transition rows are styled containers rather than
+    // native buttons, so whether they respond to a keyboard can only be settled
+    // in a browser: a click handler is never serialized into markup, which is
+    // why test/views.test.tsx can only assert the attributes they advertise.
+
+    /** Every element claiming to be a button must also be focusable. */
+    const auditButtonClaims = () =>
+      page.evaluate(() => {
+        const claimed = [...document.querySelectorAll('[role="button"]')];
+        return {
+          claimed: claimed.length,
+          unfocusable: claimed
+            .filter((element) => element.getAttribute('tabindex') !== '0')
+            .map((element) => element.outerHTML.slice(0, 80)),
+        };
+      });
+
+    await page.click('#nav-tab-comms');
+    await page.waitForTimeout(800);
+
+    const commsAudit = await auditButtonClaims();
+    check('channel cards claim button semantics', commsAudit.claimed >= 3, `${commsAudit.claimed} role=button elements`);
+    check(
+      'every channel card can take focus',
+      commsAudit.unfocusable.length === 0,
+      commsAudit.unfocusable.join(' | ')
+    );
+
+    const unselectedCards = page.locator('main [role="button"][aria-pressed="false"]');
+    if ((await unselectedCards.count()) > 0) {
+      // Selection is single-select, so the total pressed count stays at one
+      // while it moves. Track the focused card itself rather than the tally.
+      const card = unselectedCards.first();
+      const cardHandle = await card.elementHandle();
+      await card.focus();
+      check(
+        'a channel card is reachable with the keyboard',
+        await page.evaluate(() => document.activeElement?.getAttribute('role') === 'button')
+      );
+
+      await page.keyboard.press('Space');
+      await page.waitForTimeout(400);
+      const pressedState = await cardHandle.evaluate((element) => element.getAttribute('aria-pressed'));
+      const selectedTotal = await page.locator('main [role="button"][aria-pressed="true"]').count();
+      check('Space selects the focused channel card', pressedState === 'true', `aria-pressed=${pressedState}`);
+      check('selection stays single-select', selectedTotal === 1, `${selectedTotal} cards selected`);
+    } else {
+      console.log('  info  every channel card was already selected; Space path not exercised');
+    }
+
+    await page.click('#nav-tab-telemetry');
+    await page.waitForTimeout(1200);
+
+    const dashboardAudit = await auditButtonClaims();
+    check(
+      'every dashboard control claiming to be a button can take focus',
+      dashboardAudit.unfocusable.length === 0,
+      dashboardAudit.unfocusable.join(' | ')
+    );
+
+    const collapsedRows = page.locator('main [role="button"][aria-expanded="false"]');
+    if ((await collapsedRows.count()) > 0) {
+      await collapsedRows.first().focus();
+      const expandedBefore = await page.locator('main [role="button"][aria-expanded="true"]').count();
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(400);
+      const expandedAfter = await page.locator('main [role="button"][aria-expanded="true"]').count();
+      check(
+        'Enter expands the focused state-transition row',
+        expandedAfter === expandedBefore + 1,
+        `${expandedBefore} -> ${expandedAfter} expanded`
+      );
+    } else {
+      console.log('  info  no collapsed transition row to exercise');
+    }
+
     console.log('\n== console health ==');
     check('no uncaught page errors', pageErrors.length === 0, pageErrors.slice(0, 2).join(' | '));
 

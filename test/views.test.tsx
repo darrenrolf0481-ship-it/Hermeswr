@@ -295,3 +295,212 @@ test('every view renders deterministically for the same props', () => {
 
   assert.equal(first, second, 'rendering must not depend on hidden state');
 });
+
+// --- Accessibility invariants -------------------------------------------------
+//
+// These assert what static markup can honestly express: that every control is
+// announced with a name, and that anything advertising itself as a button can
+// be focused. The key handling itself is pinned in test/a11y.test.ts and
+// exercised against a real browser in test/browser/reconMap.mjs, because a
+// click handler is never serialized into markup.
+
+/** Every tab, rendered with the shared fixtures. */
+function allViews(): Array<[string, React.ReactElement]> {
+  return [
+    [
+      'WarRoomFeed',
+      <WarRoomFeed
+        messages={[message]}
+        agentState="REASONING"
+        onSendMessage={asyncNoop}
+        subAgents={[subAgent]}
+        latestSketchDataUrl={null}
+        activePersona="Tactical Commander"
+      />,
+    ],
+    [
+      'TelemetryDashboard',
+      <TelemetryDashboard
+        currentTelemetry={telemetry}
+        history={telemetryHistory}
+        logs={[logEntry]}
+        toolStats={toolStats}
+        agents={[agent]}
+        tasks={[task]}
+        channels={[channel]}
+        throughputHistory={throughputHistory}
+        transitions={[transition]}
+        onClearLogs={noop}
+        onRefreshData={noop}
+      />,
+    ],
+    [
+      'TaskManagerView',
+      <TaskManagerView
+        tasks={[task]}
+        agents={[agent]}
+        onCreateTask={asyncNoop}
+        onTaskAction={asyncNoop}
+        recommendations={[recommendation]}
+        onApplyCorrection={asyncNoop}
+        onOpenCorrectionsTab={noop}
+      />,
+    ],
+    [
+      'TacticalCorrectionPanel',
+      <TacticalCorrectionPanel
+        recommendations={[recommendation]}
+        config={correctionConfig}
+        agentMetrics={[agentMetrics]}
+        agents={[agent]}
+        onApplyCorrection={asyncNoop}
+        onDismissCorrection={asyncNoop}
+        onUpdateConfig={asyncNoop}
+        onSimulateFailure={asyncNoop}
+        onRefresh={asyncNoop}
+        onTriggerEvaluation={asyncNoop}
+      />,
+    ],
+    [
+      'AgentDeploymentView',
+      <AgentDeploymentView
+        agents={[agent]}
+        onDeployAgent={asyncNoop}
+        onAgentAction={asyncNoop}
+        onUpdateAgentModel={asyncNoop}
+        onSelectAgentForTask={noop}
+        agentMetrics={[agentMetrics]}
+        recommendations={[recommendation]}
+        onApplyCorrection={asyncNoop}
+        onOpenCorrectionsTab={noop}
+      />,
+    ],
+    [
+      'CommChannelsView',
+      <CommChannelsView channels={[channel]} onBroadcastPacket={asyncNoop} onRefreshChannels={asyncNoop} />,
+    ],
+    [
+      'PerformanceTuningView',
+      <PerformanceTuningView
+        config={tuningConfig}
+        onUpdateConfig={asyncNoop}
+        memoriesCount={3}
+        onFlushCache={noop}
+      />,
+    ],
+    ['TermuxTerminal', <TermuxTerminal />],
+    ['StylusCanvas', <StylusCanvas onSaveSketch={noop} onSendToWarRoom={noop} />],
+    [
+      'HermesMatrix',
+      <HermesMatrix
+        activePersona="Tactical Commander"
+        onChangePersona={noop}
+        temperature={0.7}
+        onChangeTemperature={noop}
+        memories={[memory]}
+        onAddMemory={noop}
+        onDeleteMemory={noop}
+        onClearMemories={noop}
+      />,
+    ],
+  ];
+}
+
+/** True when the control at `index` sits inside a wrapping <label>. */
+function insideLabel(html: string, index: number): boolean {
+  const before = html.slice(0, index);
+  return before.lastIndexOf('<label') > before.lastIndexOf('</label>');
+}
+
+/** Controls that would reach a screen reader with no name at all. */
+function unnamedControls(html: string): string[] {
+  const labelFor = new Set([...html.matchAll(/<label\b[^>]*\sfor="([^"]+)"/g)].map((m) => m[1]));
+  const issues: string[] = [];
+
+  for (const match of html.matchAll(/<(input|select|textarea)\b([^>]*)>/g)) {
+    const attrs = match[2] ?? '';
+    if (/\baria-lab(?:el|elledby)=/.test(attrs)) continue;
+    const id = /\bid="([^"]+)"/.exec(attrs)?.[1];
+    if (id && labelFor.has(id)) continue;
+    if (insideLabel(html, match.index ?? 0)) continue;
+    issues.push(`<${match[1]} ${attrs.trim().slice(0, 80)}>`);
+  }
+
+  return issues;
+}
+
+/** Elements that claim to be buttons but cannot take focus. */
+function unfocusableButtons(html: string): string[] {
+  return [...html.matchAll(/<[a-z][\w-]*\b[^>]*\brole="button"[^>]*>/g)]
+    .map((m) => m[0])
+    .filter((tag) => !/\btabindex="0"/.test(tag))
+    .map((tag) => tag.slice(0, 90));
+}
+
+/** Focusable elements that claim to be buttons. */
+function keyboardButtons(html: string): string[] {
+  return [...html.matchAll(/<[a-z][\w-]*\b[^>]*\brole="button"[^>]*>/g)]
+    .map((m) => m[0])
+    .filter((tag) => /\btabindex="0"/.test(tag));
+}
+
+test('every form control a view renders has an accessible name', () => {
+  const offenders = allViews().flatMap(([name, element]) =>
+    unnamedControls(render(name, element)).map((control) => `${name}: ${control}`)
+  );
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `controls that would be announced with no name:\n  ${offenders.join('\n  ')}`
+  );
+});
+
+test('nothing advertises itself as a button without being focusable', () => {
+  const offenders = allViews().flatMap(([name, element]) =>
+    unfocusableButtons(render(name, element)).map((tag) => `${name}: ${tag}`)
+  );
+
+  assert.deepEqual(offenders, [], `role="button" without tabindex="0":\n  ${offenders.join('\n  ')}`);
+});
+
+test('selectable cards are keyboard-operable, not merely clickable', () => {
+  const channels = render(
+    'CommChannelsView',
+    <CommChannelsView channels={[channel]} onBroadcastPacket={asyncNoop} onRefreshChannels={asyncNoop} />
+  );
+  const cards = keyboardButtons(channels);
+  assert.ok(cards.length >= 1, 'a channel card should be reachable by keyboard');
+  assert.match(cards[0], /aria-pressed="(true|false)"/, 'the card must expose whether it is selected');
+
+  const dashboard = render(
+    'TelemetryDashboard',
+    <TelemetryDashboard
+      currentTelemetry={telemetry}
+      history={telemetryHistory}
+      logs={[logEntry]}
+      toolStats={toolStats}
+      agents={[agent]}
+      tasks={[task]}
+      channels={[channel]}
+      throughputHistory={throughputHistory}
+      transitions={[transition]}
+      onClearLogs={noop}
+      onRefreshData={noop}
+    />
+  );
+  const rows = keyboardButtons(dashboard);
+  assert.ok(rows.length >= 1, 'a transition row should be reachable by keyboard');
+  assert.match(rows[0], /aria-expanded="(true|false)"/, 'the row must expose whether it is expanded');
+});
+
+test('the unnamed-control check catches a control that has only a placeholder', () => {
+  // Guards the guard: if this helper stopped detecting missing names, the
+  // invariant above would pass vacuously.
+  const placeholderOnly = '<input type="text" placeholder="Search...">';
+  assert.equal(unnamedControls(placeholderOnly).length, 1, 'placeholder is not an accessible name');
+  assert.equal(unnamedControls('<input type="text" aria-label="Search">').length, 0);
+  assert.equal(unnamedControls('<label for="a">Name</label><input id="a">').length, 0);
+  assert.equal(unnamedControls('<label>Name<input type="text"></label>').length, 0);
+  assert.equal(unnamedControls('<input type="text">').length, 1);
+});
